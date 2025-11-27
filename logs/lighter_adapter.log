@@ -1,0 +1,53 @@
+2025-11-27 12:42:12,152 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 12:42:13,973 [WARNING] - get_orderbook_ticker 返回失败，准备重试 (1/3)
+2025-11-27 12:42:15,478 [WARNING] - get_orderbook_ticker 返回失败，准备重试 (2/3)
+2025-11-27 12:43:07,734 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 12:43:39,644 [WARNING] - get_orderbook_ticker 失败，准备重试 (1/3): BookTicker.__init__() got an unexpected keyword argument 'bid_qty'
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/src/utils.py", line 258, in wrapper
+    result = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 217, in get_orderbook_ticker
+    data=BookTicker(
+         ^^^^^^^^^^^
+TypeError: BookTicker.__init__() got an unexpected keyword argument 'bid_qty'
+2025-11-27 12:44:07,095 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 12:45:10,139 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 12:47:55,233 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:13:37,607 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:14:02,687 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:15:06,949 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:16:11,064 [ERROR] - 下市价开仓单失败: argument 2: TypeError: wrong type
+2025-11-27 13:16:45,243 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:18:20,798 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:18:50,880 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 13:22:42,288 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:22:44,299 [ERROR] - 下市价开仓单失败: 'LightAdapter' object has no attribute 'loop'
+2025-11-27 13:22:58,744 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:23:03,812 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 13:24:43,730 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:24:45,730 [ERROR] - 下市价开仓单失败: 'LightAdapter' object has no attribute 'loop'
+2025-11-27 13:25:05,049 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:25:07,033 [ERROR] - 下市价开仓单失败: LightAdapter.create_market_order_async() got an unexpected keyword argument 'market_index'
+2025-11-27 13:26:06,196 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:27:39,131 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:27:47,131 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 13:31:57,190 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:32:04,229 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 13:33:49,926 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:33:52,187 [ERROR] - 下市价开仓单失败: 'LightAdapter' object has no attribute 'create_market_order_async'
+2025-11-27 13:36:23,787 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:36:26,289 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 13:39:39,447 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:39:42,225 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 13:42:36,364 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:42:39,771 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 13:49:02,346 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:52:12,095 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:52:50,259 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:52:52,040 [ERROR] - 下市价开仓单失败: 'LightAdapter' object has no attribute 'create_market_order_async'
+2025-11-27 13:55:47,901 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:56:04,522 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 13:58:28,949 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 13:58:34,122 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
+2025-11-27 14:01:00,111 [INFO] - get_account_info success, account_index: 558819

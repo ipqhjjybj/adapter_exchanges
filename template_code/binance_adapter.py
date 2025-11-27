@@ -28,6 +28,8 @@ from src.utils import retry_wrapper
 from src.log_kit import logger
 
 
+
+
 class BinanceAdapter(ExchangeAdapter):
     """币安交易所适配器实现"""
 
