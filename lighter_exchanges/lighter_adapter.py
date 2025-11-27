@@ -9,7 +9,9 @@ class LightAdapter(object):
         self.base_url = "https://mainnet.zklighter.elliot.ai"
 
         self.l1_address = l1_address
-    
+        self.apikey_private_key = apikey_private_key
+        self.api_key_index = api_key_index
+
     
     
 
