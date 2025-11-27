@@ -531,8 +531,168 @@ class LightAdapter(ExchangeAdapter):
         except Exception as e:
             logger.error(f"查询订单失败: {e}", exc_info=True)
             return AdapterResponse(success=False, data=None, error_msg=str(e))
+    
+    def cancel_order(
+        self, symbol: str, order_id: str
+    ) -> AdapterResponse[OrderCancelResult]:
+        """
+        取消订单
 
+        Args:
+            symbol: 交易对
+            order_id: 订单ID
 
+        Returns:
+            AdapterResponse: 包含取消结果的响应
+        """
+        return self.cancel_all_orders(symbol)
+    
+    def place_limit_order(
+        self, symbol: str, side: str, position_side: str, quantity: float, price: float
+    ) -> AdapterResponse[OrderPlacementResult]:
+        """
+        下限价单
+
+        Args:
+            symbol: 交易对
+            side: 方向("BUY"或"SELL")
+            position_side: 持仓方向("LONG"或"SHORT")
+            quantity: 数量
+            price: 价格
+
+        Returns:
+            AdapterResponse: 包含订单信息的响应
+        """
+        try:
+            market_id = self.market_index_dic[symbol]
+            price_decimal = self.price_decimal_dic[symbol]
+            size_decimal = self.size_decimal_dic[symbol]
+
+            if round(quantity, size_decimal) != quantity:
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=f"quantity must be {size_decimal} decimal places",
+                )
+            
+            if round(price, price_decimal) != price:
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=f"price must be {price_decimal} decimal places",
+                )
+            
+            send_price = int(price * (10 ** price_decimal))
+            send_quantity = int(quantity * (10 ** size_decimal))
+
+            if side == "BUY":
+                is_ask = False
+            else:
+                is_ask = True
+            
+            position_side = "open"
+            client_order_index = self.get_client_order_id()
+
+            # 在新的事件循环中重新创建客户端并执行操作
+            async def _create_limit_order_with_new_client():
+                # 重新创建客户端
+                new_client = lighter.SignerClient(
+                    url=self.base_url,
+                    private_key=self.apikey_private_key,
+                    account_index=self.account_index,
+                    api_key_index=self.api_key_index,
+                )
+                
+                try:
+                    # 执行订单创建
+                    result = await new_client.create_order(
+                        market_index=market_id,
+                        client_order_index=client_order_index,
+                        base_amount=send_quantity,
+                        price=send_price,
+                        is_ask=is_ask,
+                        order_type=lighter.SignerClient.ORDER_TYPE_LIMIT,
+                        #time_in_force=lighter.SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
+                        time_in_force=lighter.SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+                        #time_in_force=lighter.SignerClient.ORDER_TIME_IN_FORCE_POST_ONLY,
+                        #order_expiry=lighter.SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY
+                        #order_expiry=lighter.SignerClient.DEFAULT_IOC_EXPIRY,
+                        #order_expiry=lighter.SignerClient.MINUTE,
+                    )
+                    return result
+                finally:
+                    # 确保关闭客户端
+                    await new_client.close()
+            
+            # 使用新的事件循环
+            x, tx_hash, err = asyncio.run(_create_limit_order_with_new_client())
+
+            if err is not None:
+                logger.error(f"下市价开仓单失败: {err}")
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=str(err),
+                )
+            
+            order_placement_result = OrderPlacementResult(
+                symbol=symbol,
+                order_id=client_order_index,
+                order_qty=quantity,
+                order_price=price,
+                side=side,
+                position_side=position_side,
+                api_resp={"tx_hash": tx_hash, "result": x},
+            )
+
+            return AdapterResponse(
+                success=True, data=order_placement_result, error_msg=""
+            )
+        except Exception as e:
+            logger.error(f"下限价单失败: {e}")
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e),
+            )
+
+    def cancel_all_orders(self, symbol: str) -> AdapterResponse[bool]:
+        """
+        取消所有订单
+        """
+        try:
+            # 在新的事件循环中重新创建客户端并执行操作
+            async def _cancel_all_order_with_new_client():
+                # 重新创建客户端
+                new_client = lighter.SignerClient(
+                    url=self.base_url,
+                    private_key=self.apikey_private_key,
+                    account_index=self.account_index,
+                    api_key_index=self.api_key_index,
+                )
+                
+                try:
+                    # 执行订单创建
+                    result = await new_client.cancel_all_orders(time_in_force=new_client.CANCEL_ALL_TIF_IMMEDIATE, timestamp_ms=0)
+                    return result
+                finally:
+                    # 确保关闭客户端
+                    await new_client.close()
+            
+            # 使用新的事件循环
+            x, tx_hash, err = asyncio.run(_cancel_all_order_with_new_client())
+
+            if err is not None:
+                logger.error(f"平仓所有订单失败: {err}")
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=str(err),
+                )
+            return AdapterResponse(success=True, data=None, error_msg="")
+        except Exception as e:
+            logger.error(f"取消所有订单失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
 
 
 
@@ -556,10 +716,15 @@ if __name__ == "__main__":
     #print(lighter_adapter.query_position("ETHUSDT"))
 
     #print(lighter_adapter.query_order("ETHUSDT", "1764148056"))
-    print(lighter_adapter.query_order("ETHUSDT", "1764212198891"))
+    #print(lighter_adapter.query_order("ETHUSDT", "1764212198891"))
 
+    # print(lighter_adapter.cancel_all_orders("ETHUSDT"))
+    print(lighter_adapter.place_limit_order("ETHUSDT", "BUY", "LONG", 0.1, 2800))
+    #print(lighter_adapter.place_limit_order("ETHUSDT", "SELL", "SHORT", 0.1, 2000
 
     #lighter_adapter.close()
 
     #lighter_adapter.get_account_info()
+
+    pass
 

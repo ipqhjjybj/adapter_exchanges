@@ -137,3 +137,44 @@ NameError: name 'OrderStatus' is not defined
 2025-11-27 16:25:59,195 [INFO] - get_account_info success, account_index: 558819
 2025-11-27 16:25:59,767 [INFO] - auth token near expired, re-create auth token
 2025-11-27 16:26:00,232 [INFO] - new token created:1764252000:558819:2:80a78509e28e4e69952a5f8620bd67017408003237e7ae91737ce3b75b12b92a16ae3e6dc332104b2b8713108b1afa99b2f2ff49a50f16d8fc4997d36700b7113b5cc25f46634bbd195db194f4eb7905
+2025-11-27 16:32:39,686 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:32:40,454 [ERROR] - 取消所有订单失败: name '_create_market_order_with_new_client' is not defined
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 575, in cancel_all_orders
+    x, tx_hash, err = asyncio.run(_create_market_order_with_new_client())
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name '_create_market_order_with_new_client' is not defined
+2025-11-27 16:32:54,066 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:32:55,106 [ERROR] - 取消所有订单失败: name 'client' is not defined
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 575, in cancel_all_orders
+    x, tx_hash, err = asyncio.run(_cancel_all_order_with_new_client())
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/envs/alphalib/lib/python3.11/asyncio/runners.py", line 190, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/envs/alphalib/lib/python3.11/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/envs/alphalib/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 568, in _cancel_all_order_with_new_client
+    result = await new_client.cancel_all_orders(time_in_force=client.CANCEL_ALL_TIF_IMMEDIATE, timestamp_ms=0)
+                                                              ^^^^^^
+NameError: name 'client' is not defined
+2025-11-27 16:33:20,907 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:33:22,375 [ERROR] - 取消所有订单失败: name 'data' is not defined
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 584, in cancel_all_orders
+    return AdapterResponse(success=True, data=data, error_msg="")
+                                              ^^^^
+NameError: name 'data' is not defined
+2025-11-27 16:34:10,822 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:34:43,001 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:46:26,009 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:46:58,745 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:47:39,466 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:47:46,882 [ERROR] - 下限价单失败: name 'client' is not defined
+2025-11-27 16:47:59,399 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:49:09,077 [INFO] - get_account_info success, account_index: 558819
