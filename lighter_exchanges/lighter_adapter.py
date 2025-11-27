@@ -4,6 +4,7 @@ import asyncio
 import sys
 
 import logging
+from decimal import Decimal
 from logging.handlers import RotatingFileHandler
 import os
 import time
@@ -24,7 +25,7 @@ from src.data_types import (
     UmAccountInfo,
 )
 from src.enums import OrderStatus
-from src.utils import retry_wrapper
+from src.utils import retry_wrapper, adjust_to_price_filter, adjust_to_lot_size
 from src.log_kit import logger
 from src.exchange_adapter import ExchangeAdapter
 
@@ -52,10 +53,11 @@ class LightAdapter(ExchangeAdapter):
         self.auth_token = None
 
         # 更新交易所信息
-        market_index_dic, price_decimal_dic, size_decimal_dic = self.get_exchange_info()
+        market_index_dic, price_decimal_dic, size_decimal_dic, min_base_amount_dic = self.get_exchange_info()
         self.market_index_dic = market_index_dic
         self.price_decimal_dic = price_decimal_dic
         self.size_decimal_dic = size_decimal_dic
+        self.min_base_amount_dic = min_base_amount_dic
 
         assert len(market_index_dic) > 0, "get_exchange_info error"
         assert len(price_decimal_dic) > 0, "get_exchange_info error"
@@ -133,6 +135,8 @@ class LightAdapter(ExchangeAdapter):
                 market_index_dic = {}
                 price_decimal_dic = {}
                 size_decimal_dic = {}
+                min_base_amount_dic = {}
+
                 for symbol_dic in order_book_details:
                     symbol = symbol_dic["symbol"] + "USDT"
                     market_id = int(symbol_dic["market_id"])
@@ -141,7 +145,9 @@ class LightAdapter(ExchangeAdapter):
                     market_index_dic[symbol] = market_id
                     price_decimal_dic[symbol] = price_decimals
                     size_decimal_dic[symbol] = size_decimals
-                return market_index_dic, price_decimal_dic, size_decimal_dic
+                    min_base_amount_dic[symbol] = float(symbol_dic["min_base_amount"])
+
+                return market_index_dic, price_decimal_dic, size_decimal_dic, min_base_amount_dic
             else:
                 raise Exception("get_exchange_info error")
         else:
@@ -688,6 +694,63 @@ class LightAdapter(ExchangeAdapter):
                 error_msg=str(e),
             )
     
+    def adjust_order_price(
+        self, symbol: str, price: float, round_direction: str = "UP"
+    ) -> float:
+        """
+        调整订单价格
+
+        Args:
+            symbol: 交易对
+            price: 原始价格
+            round_direction: 舍入方向，'UP'向上取整，'DOWN'向下取整(默认)
+
+        Returns:
+            float: 调整后的价格
+        """
+        priceDecimal = self.price_decimal_dic[symbol]
+        minPrice = round(0.1 ** priceDecimal, priceDecimal)
+        maxPrice = 10 ** 9
+        adjusted_price = adjust_to_price_filter(
+            Decimal(str(price)),
+            Decimal(minPrice),
+            Decimal(maxPrice),
+            Decimal(round(0.1 ** priceDecimal, priceDecimal)),
+            round_direction,
+        )
+        adjusted_price = round(float(adjusted_price), priceDecimal)
+        logger.info(
+            f"按照交易所规则调整订单价格, 调整前价格为: {price}, 调整后价格为: {adjusted_price}"
+        )
+        return adjusted_price
+        
+
+    def adjust_order_qty(self, symbol: str, quantity: float) -> float:
+        """
+        调整订单数量
+
+        Args:
+            symbol: 交易对
+            quantity: 原始数量
+
+        Returns:
+            float: 调整后的数量
+        """
+        minQty = self.min_base_amount_dic[symbol]
+        sizeDecial = self.size_decimal_dic[symbol]
+        maxQty = 10 ** 9
+        adjusted_qty = adjust_to_lot_size(
+            Decimal(str(quantity)),
+            Decimal(minQty),
+            Decimal(maxQty),
+            Decimal(round(0.1 ** sizeDecial, sizeDecial)),
+        )
+        adjusted_qty = round(float(adjusted_qty), sizeDecial)
+        logger.info(
+            f"按照交易所规则调整订单数量, 调整前数量为: {quantity}, 调整后数量为: {adjusted_qty}"
+        )
+        return adjusted_qty
+    
     def get_account_position_equity_ratio(self) -> AdapterResponse[float]:
         """
         获取账户持仓价值占比
@@ -905,11 +968,15 @@ if __name__ == "__main__":
 
     #print(lighter_adapter.query_all_um_open_orders("ETHUSDT"))
 
-    print(lighter_adapter.get_um_account_info())
+    #print(lighter_adapter.get_um_account_info())
 
     #lighter_adapter.close()
 
     #lighter_adapter.get_account_info()
+
+    print(lighter_adapter.adjust_order_price("ETHUSDT", 3.3333, "UP"))
+
+    print(lighter_adapter.adjust_order_qty("ETHUSDT", 3.3333333))
 
     pass
 
