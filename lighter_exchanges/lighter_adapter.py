@@ -655,6 +655,84 @@ class LightAdapter(ExchangeAdapter):
                 data=None,
                 error_msg=str(e),
             )
+    
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
+    def get_net_value(self) -> AdapterResponse[float]:
+        """
+        获取净价值
+
+        Returns:
+            AdapterResponse: 包含净价值的响应
+        """
+        try:
+            url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
+
+            data = requests.get(url, headers=self.headers, timeout=60)
+            if data.status_code == 200:
+                data = data.json()
+                code = data.get("code")
+                if code == 200:
+                    net_value = data["accounts"][0]["collateral"]
+                    return AdapterResponse(success=True, data=net_value, error_msg="")
+                else:
+                    logger.error(f"获取净价值失败: {data.text}")
+                    return AdapterResponse(success=False, data=None, error_msg=data.text)
+            else:
+                logger.error(f"获取净价值失败: {data.text}")
+                return AdapterResponse(success=False, data=None, error_msg=data.text)
+        except Exception as e:
+            logger.error(f"获取净价值失败: {e}", exc_info=True)
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e),
+            )
+    
+    def get_account_position_equity_ratio(self) -> AdapterResponse[float]:
+        """
+        获取账户持仓价值占比
+
+        Returns:
+            AdapterResponse: 包含净价值的响应
+        """
+        try:
+            url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
+
+            data = requests.get(url, headers=self.headers, timeout=60)
+            if data.status_code == 200:
+                data = data.json()
+                code = data.get("code")
+                if code == 200:
+                    total_value = float(data["accounts"][0]["collateral"])
+                    position_value = 0
+                    for position in data["accounts"][0]["positions"]:
+                        position_value += float(position["position_value"])
+                    if total_value == 0:
+                        ratio = 9999
+                    else:
+                        ratio = position_value / total_value
+                    return AdapterResponse(success=True, data=ratio, error_msg="")
+                else:
+                    logger.error(f"获取账户持仓保证金率失败: {data.text}")
+                    return AdapterResponse(success=False, data=None, error_msg=data.text)
+            else:
+                logger.error(f"获取账户持仓保证金率失败: {data.text}")
+                return AdapterResponse(success=False, data=None, error_msg=data.text)
+        except Exception as e:
+            logger.error(f"获取账户持仓保证金率失败: {e}", exc_info=True)
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e),
+            )
+    
+    def get_contract_trade_unit(self, symbol: str) -> AdapterResponse[float]:
+        """
+        获取合约交易单位
+        """
+        size_decimal = self.size_decimal_dic[symbol]
+        return AdapterResponse(success=True, data=0.1 ** size_decimal, error_msg="")
+
 
     def cancel_all_orders(self, symbol: str) -> AdapterResponse[bool]:
         """
@@ -693,7 +771,104 @@ class LightAdapter(ExchangeAdapter):
         except Exception as e:
             logger.error(f"取消所有订单失败: {e}", exc_info=True)
             return AdapterResponse(success=False, data=None, error_msg=str(e))
+    
+    def query_all_um_open_orders(self, symbol: str) -> AdapterResponse[list]:
+        """
+        查询所有未成交订单
+        """
+        self.judge_auth_token_expired()
+        market_id = self.market_index_dic[symbol]
+        try:
+            # 1.先检查 open_orders 里面是否有这个订单
+            url_activate_orders = f"{self.base_url}/api/v1/accountActiveOrders?account_index={self.account_index}&market_id={market_id}&auth={self.auth_token}"
+            data = requests.get(url_activate_orders, headers=self.headers, timeout=60)
+            if data.status_code == 200:
+                data = data.json()
+                code = data.get("code")
+                if code == 200:
+                    return AdapterResponse(success=True, data=data["orders"], error_msg="")
+                else:
+                    logger.error(f"查询所有未成交订单失败: {data.text}")
+                    return AdapterResponse(success=False, data=None, error_msg=data.text)
+            else:
+                logger.error(f"查询所有未成交订单失败: {data.text}")
+                return AdapterResponse(success=False, data=None, error_msg=data.text)
+        except Exception as e:
+            logger.error(f"查询所有未成交订单失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
+    
+    def set_symbol_leverage(self, symbol: str, leverage: int) -> AdapterResponse[bool]:
+        """
+        设置合约杠杆
+        """
+        msg = f"设置合约杠杆: {symbol}, {leverage}， 未找到api"
+        logger.error(msg)
+        return AdapterResponse(success=False, data=None, error_msg=msg)
+    
+    def get_um_account_info(self) -> AdapterResponse[UmAccountInfo]:
+        """
+        获取账户信息
+        """
+        try:
+            url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
 
+            data = requests.get(url, headers=self.headers, timeout=60)
+            if data.status_code == 200:
+                data = data.json()
+                code = data.get("code")
+                if code == 200:
+                    account = data.get("accounts", [{}])[0]
+
+                    # 1. 计算 margin_balance（保证金余额）
+                    margin_balance = data["accounts"][0]["available_balance"]
+
+                    # 2. 计算 initial_margin（初始保证金）和 maint_margin（维持保证金）
+                    initial_margin = 0.0
+                    maint_margin = 0.0
+                    positions = account.get("positions", [])
+
+                    for pos in positions:
+                        position = float(pos.get("position", 0.0))
+                        if position == 0:  # 无持仓，跳过该仓位
+                            continue
+                        
+                        # 若有持仓，需根据交易所规则计算该仓位的初始/维持保证金（示例逻辑，需根据实际规则调整）
+                        # 示例：初始保证金 = 仓位价值 / 杠杆（初始保证金率倒数），维持保证金 = 初始保证金 * 维持保证金率
+                        position_value = abs(float(pos.get("position_value", 0.0)))
+                        initial_margin_fraction = float(pos.get("initial_margin_fraction", 0.0))  # 初始保证金率（百分比）
+                        if initial_margin_fraction > 0:
+                            pos_initial_margin = position_value / (100 / initial_margin_fraction)  # 仓位初始保证金
+                            initial_margin += pos_initial_margin
+                            
+                            # 维持保证金率通常为初始保证金率的一定比例（示例取 50%，需按实际规则调整）
+                            maint_margin_fraction = initial_margin_fraction * 0.5
+                            pos_maint_margin = position_value / (100 / maint_margin_fraction)  # 仓位维持保证金
+                            maint_margin += pos_maint_margin
+                    
+                    # 3. 计算保证金率
+                    initial_margin_rate = margin_balance / initial_margin if initial_margin > 0 else 999
+                    maint_margin_rate = margin_balance / maint_margin if maint_margin > 0 else 999
+
+                    um_account_info = UmAccountInfo(
+                        timestamp=int(time.time() * 1000),
+                        initial_margin=initial_margin,
+                        maint_margin=maint_margin,
+                        margin_balance=margin_balance,
+                        initial_margin_rate=margin_balance /initial_margin  if initial_margin > 0 else 999,
+                        maint_margin_rate=margin_balance /maint_margin if maint_margin > 0 else 999,
+                        api_resp=data,
+                    )
+                    return AdapterResponse(success=True, data=um_account_info, error_msg="")
+                else:
+                    logger.error(f"获取账户信息失败: {data.text}")
+                    return AdapterResponse(success=False, data=None, error_msg=data.text)
+            else:
+                logger.error(f"获取账户信息失败: {data.text}")
+                return AdapterResponse(success=False, data=None, error_msg=data.text)
+            
+        except Exception as e:
+            logger.error(f"获取账户信息失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
 
 
 if __name__ == "__main__":
@@ -719,8 +894,18 @@ if __name__ == "__main__":
     #print(lighter_adapter.query_order("ETHUSDT", "1764212198891"))
 
     # print(lighter_adapter.cancel_all_orders("ETHUSDT"))
-    print(lighter_adapter.place_limit_order("ETHUSDT", "BUY", "LONG", 0.1, 2800))
-    #print(lighter_adapter.place_limit_order("ETHUSDT", "SELL", "SHORT", 0.1, 2000
+    # print(lighter_adapter.place_limit_order("ETHUSDT", "BUY", "LONG", 0.1, 2800))
+    #print(lighter_adapter.place_limit_order("ETHUSDT", "SELL", "SHORT", 0.1, 2000)
+
+    #print(lighter_adapter.get_net_value())
+
+    #print(lighter_adapter.get_account_position_equity_ratio())
+
+    #print(lighter_adapter.get_contract_trade_unit("PAXGUSDT"))
+
+    #print(lighter_adapter.query_all_um_open_orders("ETHUSDT"))
+
+    print(lighter_adapter.get_um_account_info())
 
     #lighter_adapter.close()
 
