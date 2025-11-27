@@ -44,20 +44,9 @@ class LightAdapter(ExchangeAdapter):
         self.get_account_info()
         assert self.account_index >= 0, "get_account_info error"
 
-        # 获得当前异步队列
-        loop = self.get_current_loop()
-        # 初始化lighter
-        # 同步调用异步初始化（不推荐，仅临时兼容）
-        api_client, client = loop.run_until_complete(
-            self._init_client_async()
-        )
-        self.api_client = api_client
-        self.client = client
-
+        # 创建token
         self.next_expiry_timestamp = 0
-        self.auth_token = loop.run_until_complete(
-            self.create_auth_token_for_timestamp()
-        )
+        self.auth_token = None
 
         # 更新交易所信息
         market_index_dic, price_decimal_dic, size_decimal_dic = self.get_exchange_info()
@@ -68,73 +57,43 @@ class LightAdapter(ExchangeAdapter):
         assert len(market_index_dic) > 0, "get_exchange_info error"
         assert len(price_decimal_dic) > 0, "get_exchange_info error"
         assert len(size_decimal_dic) > 0, "get_exchange_info error"
-
-
-    def get_current_loop(self):
-        """
-        # 手动创建并设置事件循环（解决 no running event loop 问题）
-        """
-        try:
-            # 获取当前线程的事件循环，如果没有则创建
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # 没有运行中的循环，创建新循环并设为当前循环
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        return loop
-
-    
-    def close(self):
-        loop = self.get_current_loop()
-        loop.run_until_complete(
-            self.async_close()
-        )
-    
-    async def async_close(self):
-        await self.client.close()
-        await self.api_client.close()
-    
-    async def _init_client_async(self):
-        """异步初始化客户端的内部方法"""
-        api_client = lighter.ApiClient(
-            configuration=lighter.Configuration(host=self.base_url)
-        )
-        client = lighter.SignerClient(
-            url=self.base_url,
-            private_key=self.apikey_private_key,
-            account_index=self.account_index,
-            api_key_index=self.api_key_index,
-        )
-        err = client.check_client()
-        if err is not None:
-            logger.error(f"check_client error: {err}")
-            exit(1)
-
-        return api_client, client
-    
-    async def create_auth_token_for_timestamp(self):
-        """创建授权令牌"""
-        current_time = int(time.time())
-        interval_seconds = 6 * 3600
-        start_timestamp = (current_time // interval_seconds) * interval_seconds
-        expiry_hours = 8
-        auth_token, error = self.client.create_auth_token_with_expiry(expiry_hours * 3600, timestamp=start_timestamp)
-        if error is not None:
-            raise Exception(f"Failed to create auth token: {error}")
-        
-        self.next_expiry_timestamp = start_timestamp + expiry_hours * 3600
-        
-        return auth_token
     
     def judge_auth_token_expired(self):
         """判断当前token是否过期，过期则重新创建"""
         t1 = time.time()
         if t1 > self.next_expiry_timestamp - 60 * 60:
             logger.info("auth token near expired, re-create auth token")
-            loop = self.get_current_loop()
-            self.auth_token = loop.run_until_complete(
-                self.create_auth_token_for_timestamp()
-            )
+            
+            # 在新的事件循环中重新创建客户端并创建token
+            async def _create_token_with_new_client():
+                # 重新创建客户端
+                new_client = lighter.SignerClient(
+                    url=self.base_url,
+                    private_key=self.apikey_private_key,
+                    account_index=self.account_index,
+                    api_key_index=self.api_key_index,
+                )
+                
+                try:
+                    # 创建授权令牌
+                    current_time = int(time.time())
+                    interval_seconds = 6 * 3600
+                    start_timestamp = (current_time // interval_seconds) * interval_seconds
+                    expiry_hours = 8
+                    auth_token, error = new_client.create_auth_token_with_expiry(
+                        expiry_hours * 3600, timestamp=start_timestamp
+                    )
+                    if error is not None:
+                        raise Exception(f"Failed to create auth token: {error}")
+                    
+                    next_expiry_timestamp = start_timestamp + expiry_hours * 3600
+                    return auth_token, next_expiry_timestamp
+                finally:
+                    # 确保关闭客户端
+                    await new_client.close()
+            
+            # 使用新的事件循环
+            self.auth_token, self.next_expiry_timestamp = asyncio.run(_create_token_with_new_client())
             logger.info(f"new token created:{self.auth_token}")
 
     def get_account_info(self):
@@ -413,11 +372,12 @@ if __name__ == "__main__":
         api_key_index=2
     )
 
-    #print(lighter_adapter.auth_token)
+    lighter_adapter.judge_auth_token_expired()
+    print(lighter_adapter.auth_token)
 
     #print(lighter_adapter.get_orderbook_ticker("ETHUSDT"))
     #print(lighter_adapter.get_depth("ETHUSDT"))
-    print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
+    #print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
     #print(lighter_adapter.get_account_info()
 
 

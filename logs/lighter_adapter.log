@@ -51,3 +51,6 @@ TypeError: BookTicker.__init__() got an unexpected keyword argument 'bid_qty'
 2025-11-27 13:58:28,949 [INFO] - get_account_info success, account_index: 558819
 2025-11-27 13:58:34,122 [ERROR] - 下市价开仓单失败: Timeout context manager should be used inside a task
 2025-11-27 14:01:00,111 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:09:46,004 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:09:46,799 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:09:47,254 [INFO] - new token created:1764252000:558819:2:4221efc02d6d5f95bcad75abc438444be729e1e25138c472c68ae8154c895a43d06b94510aff4c476e6f2b023cdffd5632d9e6341471f7b310a1deaefca41d93989a9b2d4cf35dd622d8c49fcaea8047
