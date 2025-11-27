@@ -1,4 +1,4 @@
-import lighter
+
 import requests
 import asyncio
 import sys
@@ -10,6 +10,9 @@ import time
 from collections import defaultdict
 
 sys.path.append("/Users/shenzhuoheng/quant_yz/git/adapter_exchanges")
+
+import lighter
+#import lighter_my as lighter
 from src.data_types import (
     BookTicker,
     Depth,
@@ -66,6 +69,7 @@ class LightAdapter(ExchangeAdapter):
             
             # 在新的事件循环中重新创建客户端并创建token
             async def _create_token_with_new_client():
+                t1 = time.time()
                 # 重新创建客户端
                 new_client = lighter.SignerClient(
                     url=self.base_url,
@@ -73,7 +77,8 @@ class LightAdapter(ExchangeAdapter):
                     account_index=self.account_index,
                     api_key_index=self.api_key_index,
                 )
-                
+                t2 = time.time()
+                print(t2 - t1)
                 try:
                     # 创建授权令牌
                     current_time = int(time.time())
@@ -360,6 +365,72 @@ class LightAdapter(ExchangeAdapter):
                 data=None,
                 error_msg=str(e),
             )
+    
+    def place_market_close_order(
+        self, symbol: str, side: str, position_side: str, quantity: float, out_price_rate: float = 0.005
+    ) -> AdapterResponse[OrderPlacementResult]:
+        """
+        下市价平仓单
+
+        Args:
+            symbol: 交易对
+            side: 方向("BUY"或"SELL")
+            position_side: 持仓方向("LONG"或"SHORT")
+            quantity: 数量
+
+        Returns:
+            AdapterResponse: 包含订单信息的响应
+        """
+        return self.place_market_open_order(symbol, side, position_side, quantity, out_price_rate)
+    
+    
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
+    def query_position(self, symbol: str) -> AdapterResponse[SymbolPosition]:
+        """
+        查询持仓
+
+        Args:
+            symbol: 交易对
+
+        Returns:
+            AdapterResponse: 包含持仓信息的响应
+        """
+
+        try:
+            market_id = self.market_index_dic[symbol]
+
+            url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
+            data = requests.get(url, headers=self.headers, timeout=60)
+            if data.status_code == 200:
+                data = data.json()
+                code = data.get("code")
+                if code == 200:
+                    long_qty = 0
+                    short_qty = 0
+                    positions = data["accounts"][0]["positions"]
+                    for position_item in positions:
+                        if position_item["market_id"] == market_id:
+                            if position_item["sign"] == 1:
+                                long_qty = float(position_item["position"])
+                            else:
+                                short_qty = float(position_item["position"])
+                    symbol_position = SymbolPosition(
+                        symbol=symbol,
+                        long_qty=long_qty,
+                        short_qty=short_qty,
+                        api_resp=positions,
+                    )
+                    return AdapterResponse(success=True, data=symbol_position, error_msg="")
+                else:
+                    logger.error(f"查询持仓失败: {data.text}")
+                    return AdapterResponse(success=False, data=None, error_msg=data.text)
+            else:
+                logger.error(f"查询持仓失败: {data.text}")
+                return AdapterResponse(success=False, data=None, error_msg=data.text)
+        except Exception as e:
+            logger.error(f"查询持仓失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
+
 
 
 if __name__ == "__main__":
@@ -372,13 +443,15 @@ if __name__ == "__main__":
         api_key_index=2
     )
 
-    lighter_adapter.judge_auth_token_expired()
-    print(lighter_adapter.auth_token)
+    # lighter_adapter.judge_auth_token_expired()
+    # print(lighter_adapter.auth_token)
 
     #print(lighter_adapter.get_orderbook_ticker("ETHUSDT"))
     #print(lighter_adapter.get_depth("ETHUSDT"))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
     #print(lighter_adapter.get_account_info()
+
+    print(lighter_adapter.query_position("ETHUSDT"))
 
 
     #lighter_adapter.close()

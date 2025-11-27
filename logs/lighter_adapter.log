@@ -54,3 +54,63 @@ TypeError: BookTicker.__init__() got an unexpected keyword argument 'bid_qty'
 2025-11-27 14:09:46,004 [INFO] - get_account_info success, account_index: 558819
 2025-11-27 14:09:46,799 [INFO] - auth token near expired, re-create auth token
 2025-11-27 14:09:47,254 [INFO] - new token created:1764252000:558819:2:4221efc02d6d5f95bcad75abc438444be729e1e25138c472c68ae8154c895a43d06b94510aff4c476e6f2b023cdffd5632d9e6341471f7b310a1deaefca41d93989a9b2d4cf35dd622d8c49fcaea8047
+2025-11-27 14:16:28,940 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:16:29,513 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:20:50,528 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:20:51,096 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:31:21,113 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:31:21,682 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:31:48,720 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:31:49,302 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:33:04,145 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:33:04,723 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:35:44,165 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:35:44,748 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:40:00,682 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:40:01,241 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:40:55,507 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:40:56,079 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:41:49,094 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:41:49,662 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:42:13,903 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:42:14,472 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:42:42,092 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:42:42,662 [INFO] - auth token near expired, re-create auth token
+2025-11-27 14:48:33,427 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 14:48:33,992 [INFO] - auth token near expired, re-create auth token
+2025-11-27 15:07:46,739 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 15:07:47,738 [ERROR] - 查询持仓失败: {"code":20001,"message":"invalid param: : field \"by\" is not set"}
+2025-11-27 15:07:47,739 [WARNING] - query_position 返回失败，准备重试 (1/3)
+2025-11-27 15:07:49,186 [ERROR] - 查询持仓失败: {"code":20001,"message":"invalid param: : field \"by\" is not set"}
+2025-11-27 15:07:49,186 [WARNING] - query_position 返回失败，准备重试 (2/3)
+2025-11-27 15:08:25,137 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 15:08:26,182 [ERROR] - 查询持仓失败: 'positions'
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 410, in query_position
+    for position_item in data["positions"]:
+                         ~~~~^^^^^^^^^^^^^
+KeyError: 'positions'
+2025-11-27 15:08:26,183 [WARNING] - query_position 返回失败，准备重试 (1/3)
+2025-11-27 15:08:27,639 [ERROR] - 查询持仓失败: 'positions'
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 410, in query_position
+    for position_item in data["positions"]:
+                         ~~~~^^^^^^^^^^^^^
+KeyError: 'positions'
+2025-11-27 15:08:27,639 [WARNING] - query_position 返回失败，准备重试 (2/3)
+2025-11-27 15:09:19,762 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 15:09:21,158 [ERROR] - 查询持仓失败: SymbolPosition.__init__() missing 1 required positional argument: 'api_resp'
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 417, in query_position
+    symbol_position = SymbolPosition(
+                      ^^^^^^^^^^^^^^^
+TypeError: SymbolPosition.__init__() missing 1 required positional argument: 'api_resp'
+2025-11-27 15:09:21,159 [WARNING] - query_position 返回失败，准备重试 (1/3)
+2025-11-27 15:09:22,624 [ERROR] - 查询持仓失败: SymbolPosition.__init__() missing 1 required positional argument: 'api_resp'
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 417, in query_position
+    symbol_position = SymbolPosition(
+                      ^^^^^^^^^^^^^^^
+TypeError: SymbolPosition.__init__() missing 1 required positional argument: 'api_resp'
+2025-11-27 15:09:22,625 [WARNING] - query_position 返回失败，准备重试 (2/3)
+2025-11-27 15:09:55,730 [INFO] - get_account_info success, account_index: 558819
