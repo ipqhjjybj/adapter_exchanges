@@ -7,7 +7,8 @@ class LightAdapter(object):
     
     def __init__(self, l1_address: str, apikey_private_key: str, api_key_index: int):
         self.base_url = "https://mainnet.zklighter.elliot.ai"
-
+    
+    
 
 
 if __name__ == "__main__":
