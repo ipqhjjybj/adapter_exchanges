@@ -242,8 +242,7 @@ class LightAdapter(ExchangeAdapter):
             return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     def place_market_open_order(
-        self, symbol: str, side: str, position_side: str, quantity: float, out_price_rate: float = 0.005,
-        worst_price_rate: float = 0.1
+        self, symbol: str, side: str, position_side: str, quantity: float, out_price_rate: float = 0.005
     ) -> AdapterResponse[OrderPlacementResult]:
         """
         下市价开仓单
@@ -282,95 +281,10 @@ class LightAdapter(ExchangeAdapter):
         else:
             price = bid_price * (1 - out_price_rate)
 
-        market_id = self.market_index_dic[symbol]
-        price_decimal = self.price_decimal_dic[symbol]
-        size_decimal = self.size_decimal_dic[symbol]
+        quantity = self.adjust_order_qty(symbol, quantity)
+        price = self.adjust_order_price(symbol, price)
         
-        if round(quantity, size_decimal) != quantity:
-            return AdapterResponse(
-                success=False,
-                data=None,
-                error_msg=f"quantity must be {size_decimal} decimal places",
-            )
-        
-        send_quantity = int(quantity * (10 ** size_decimal))
-        ask_worst_price_send = int(ask_price * (1 + worst_price_rate) * (10 ** price_decimal))
-        bid_worst_price_send = int(bid_price * (1 - worst_price_rate) * (10 ** price_decimal))
-
-        if side == "BUY":
-            worst_price = bid_worst_price_send
-            is_ask = False
-            price = ask_price
-        else:
-            worst_price = ask_worst_price_send
-            is_ask = True
-            price = bid_price
-
-        try:
-            client_order_index = self.get_client_order_id()
-
-            # 在新的事件循环中重新创建客户端并执行操作
-            async def _create_market_order_with_new_client():
-                # 重新创建客户端
-                new_client = lighter.SignerClient(
-                    url=self.base_url,
-                    private_key=self.apikey_private_key,
-                    account_index=self.account_index,
-                    api_key_index=self.api_key_index,
-                )
-                
-                try:
-                    # 执行订单创建
-                    result = await new_client.create_market_order(
-                        market_index=market_id,
-                        client_order_index=client_order_index,
-                        base_amount=send_quantity,
-                        avg_execution_price=worst_price,
-                        is_ask=is_ask,
-                    )
-                    return result
-                finally:
-                    # 确保关闭客户端
-                    await new_client.close()
-            
-            # 使用新的事件循环
-            x, tx_hash, err = asyncio.run(_create_market_order_with_new_client())
-
-            if err is not None:
-                logger.error(f"下市价开仓单失败: {err}")
-                return AdapterResponse(
-                    success=False,
-                    data=None,
-                    error_msg=str(err),
-                )
-            
-            order_placement_result = OrderPlacementResult(
-                symbol=symbol,
-                order_id=client_order_index,
-                order_qty=quantity,
-                order_price=price,
-                side=side,
-                position_side=position_side,
-                api_resp={"tx_hash": tx_hash, "result": x},
-            )
-            return AdapterResponse(
-                success=True, data=order_placement_result, error_msg=""
-            )
-
-        except asyncio.TimeoutError:
-            logger.error("下市价开仓单超时")
-            return AdapterResponse(
-                success=False,
-                data=None,
-                error_msg="Order creation timed out after 30 seconds",
-            )
-        except Exception as e:
-            logger.error(f"下市价开仓单失败: {e}")
-            return AdapterResponse(
-                success=False,
-                data=None,
-                error_msg=str(e),
-            )
+        return self.place_limit_order(symbol, side, position_side, quantity, price)
     
     def place_market_close_order(
         self, symbol: str, side: str, position_side: str, quantity: float, out_price_rate: float = 0.005
@@ -950,6 +864,7 @@ if __name__ == "__main__":
     #print(lighter_adapter.get_orderbook_ticker("ETHUSDT"))
     #print(lighter_adapter.get_depth("ETHUSDT"))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
+    print(lighter_adapter.place_market_open_order("ETHUSDT", "SELL", "SHORT", 0.1))
     #print(lighter_adapter.get_account_info()
     #print(lighter_adapter.query_position("ETHUSDT"))
 
@@ -974,9 +889,9 @@ if __name__ == "__main__":
 
     #lighter_adapter.get_account_info()
 
-    print(lighter_adapter.adjust_order_price("ETHUSDT", 3.3333, "UP"))
+    # print(lighter_adapter.adjust_order_price("ETHUSDT", 3.3333, "UP"))
 
-    print(lighter_adapter.adjust_order_qty("ETHUSDT", 3.3333333))
+    # print(lighter_adapter.adjust_order_qty("ETHUSDT", 3.3333333))
 
     pass
 
