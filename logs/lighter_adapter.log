@@ -114,3 +114,26 @@ Traceback (most recent call last):
 TypeError: SymbolPosition.__init__() missing 1 required positional argument: 'api_resp'
 2025-11-27 15:09:22,625 [WARNING] - query_position 返回失败，准备重试 (2/3)
 2025-11-27 15:09:55,730 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:24:10,951 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:24:11,518 [INFO] - auth token near expired, re-create auth token
+2025-11-27 16:24:11,984 [INFO] - new token created:1764252000:558819:2:05ec722d35819c9b6d0075ed0413fa3ed3140f9c479b781773f328fa28e53534f525c683a1dfe43ad20b278dfd764f0dfdb17b1603d207f4938f7f5bb9d3af13558c4f346a0484c11e4b1e70f4615916
+2025-11-27 16:24:12,942 [ERROR] - 查询订单失败: name 'OrderStatus' is not defined
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 501, in query_order
+    order_status = OrderStatus.CANCELED
+                   ^^^^^^^^^^^
+NameError: name 'OrderStatus' is not defined
+2025-11-27 16:24:12,943 [WARNING] - query_order 返回失败，准备重试 (1/3)
+2025-11-27 16:24:15,011 [ERROR] - 查询订单失败: name 'OrderStatus' is not defined
+Traceback (most recent call last):
+  File "/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/lighter_exchanges/lighter_adapter.py", line 501, in query_order
+    order_status = OrderStatus.CANCELED
+                   ^^^^^^^^^^^
+NameError: name 'OrderStatus' is not defined
+2025-11-27 16:24:15,011 [WARNING] - query_order 返回失败，准备重试 (2/3)
+2025-11-27 16:25:04,924 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:25:05,512 [INFO] - auth token near expired, re-create auth token
+2025-11-27 16:25:05,981 [INFO] - new token created:1764252000:558819:2:657f3059bf11651723f68fecaad7a97ad6b0d7c034271ec049c094df6c54a30b40d0765419ff410625d376aaaf6dbf91b74d09d1186ef5856be11d50b202eec23d9b8d9c62c4282a27f41f22b30f6d28
+2025-11-27 16:25:59,195 [INFO] - get_account_info success, account_index: 558819
+2025-11-27 16:25:59,767 [INFO] - auth token near expired, re-create auth token
+2025-11-27 16:26:00,232 [INFO] - new token created:1764252000:558819:2:80a78509e28e4e69952a5f8620bd67017408003237e7ae91737ce3b75b12b92a16ae3e6dc332104b2b8713108b1afa99b2f2ff49a50f16d8fc4997d36700b7113b5cc25f46634bbd195db194f4eb7905

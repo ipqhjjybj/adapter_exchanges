@@ -23,7 +23,7 @@ from src.data_types import (
     OrderCancelResult,
     UmAccountInfo,
 )
-
+from src.enums import OrderStatus
 from src.utils import retry_wrapper
 from src.log_kit import logger
 from src.exchange_adapter import ExchangeAdapter
@@ -430,6 +430,109 @@ class LightAdapter(ExchangeAdapter):
         except Exception as e:
             logger.error(f"查询持仓失败: {e}", exc_info=True)
             return AdapterResponse(success=False, data=None, error_msg=str(e))
+    
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
+    def query_order(self, symbol: str, order_id: str) -> AdapterResponse[OrderInfo]:
+        """
+        查询订单
+
+        Args:
+            symbol: 交易对
+            order_id: 订单ID
+
+        Returns:
+            AdapterResponse: 包含订单信息的响应
+        """
+        self.judge_auth_token_expired()
+        market_id = self.market_index_dic[symbol]
+        try:
+            # 1.先检查 open_orders 里面是否有这个订单
+            url_activate_orders = f"{self.base_url}/api/v1/accountActiveOrders?account_index={self.account_index}&market_id={market_id}&auth={self.auth_token}"
+            data = requests.get(url_activate_orders, headers=self.headers, timeout=60)
+            if data.status_code == 200:
+                data = data.json()
+                code = data.get("code")
+                if code == 200:
+                    for order_item in data["orders"]:
+                        if str(order_item["client_order_id"]) == str(order_id):
+                            order_status = OrderStatus.NEW
+                            avg_price = 0 
+                            if float(order_item["filled_base_amount"]) > 0:
+                                order_status = OrderStatus.PARTIALLY_FILLED
+                                avg_price = float(order_item["filled_quote_amount"]) / float(order_item["filled_base_amount"])
+                            if order_item["is_ask"]:
+                                side = "SELL"
+                            else:
+                                side = "BUY"
+                            position_side = "open"
+                            
+                            order_info = OrderInfo(
+                                order_id=order_item["client_order_id"],
+                                timestamp=order_item["timestamp"],
+                                symbol=symbol,
+                                status=order_status,
+                                side=side,
+                                position_side=position_side,
+                                filled_qty=float(order_item["filled_base_amount"]),
+                                avg_price=avg_price,
+                                order_qty=float(order_item["initial_base_amount"]),
+                                order_price=float(order_item["price"]),
+                                api_resp=data,
+                            )
+                            return AdapterResponse(success=True, data=order_info, error_msg="")
+                else:
+                    logger.error(f"查询订单失败: {e}", exc_info=True)
+                    return AdapterResponse(success=False, data=None, error_msg=str(e))
+            else:
+                logger.error(f"查询订单失败: {e}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(e))
+            
+            # 2.再检查 完成的订单里面是否有这个订单
+            url_inactivate_orders = f"{self.base_url}/api/v1/accountInactiveOrders?auth={self.auth_token}&account_index={self.account_index}&market_id={market_id}&limit=100"
+            data = requests.get(url_inactivate_orders, headers=self.headers, timeout=60)
+            if data.status_code == 200:
+                data = data.json()
+                if data["code"] == 200:
+                    for order_item in data["orders"]:
+                        if str(order_item["client_order_id"]) == str(order_id):
+                            avg_price = 0 
+                            if float(order_item["filled_base_amount"]) > 0:
+                                avg_price = float(order_item["filled_quote_amount"]) / float(order_item["filled_base_amount"])
+                            order_status = OrderStatus.CANCELED
+                            if order_item["status"] == "filled":
+                                order_status = OrderStatus.FILLED
+                            if order_item["is_ask"]:
+                                side = "SELL"
+                            else:
+                                side = "BUY"
+                            
+                            position_side = "open"
+                            order_info = OrderInfo(
+                                order_id=order_item["client_order_id"],
+                                timestamp=order_item["timestamp"],
+                                symbol=symbol,
+                                status=order_status,
+                                side=side,
+                                position_side=position_side,
+                                filled_qty=float(order_item["filled_base_amount"]),
+                                avg_price=avg_price,
+                                order_qty=float(order_item["initial_base_amount"]),
+                                order_price=float(order_item["price"]),
+                                api_resp=data,
+                            )
+                            return AdapterResponse(success=True, data=order_info, error_msg="")
+            else:
+                logger.error(f"查询订单失败: {e}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(e))
+            
+            msg = f"Not found this order:{order_id}"
+            logger.error(f"查询订单失败: {msg}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=msg)
+        except Exception as e:
+            logger.error(f"查询订单失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
+
+
 
 
 
@@ -450,8 +553,10 @@ if __name__ == "__main__":
     #print(lighter_adapter.get_depth("ETHUSDT"))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
     #print(lighter_adapter.get_account_info()
+    #print(lighter_adapter.query_position("ETHUSDT"))
 
-    print(lighter_adapter.query_position("ETHUSDT"))
+    #print(lighter_adapter.query_order("ETHUSDT", "1764148056"))
+    print(lighter_adapter.query_order("ETHUSDT", "1764212198891"))
 
 
     #lighter_adapter.close()
