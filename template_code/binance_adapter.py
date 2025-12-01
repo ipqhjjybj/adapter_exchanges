@@ -519,7 +519,7 @@ if __name__ == "__main__":
     binance_client = exchange_factory.create_client("binance", "binance_6")
     binance_adapter = BinanceAdapter(binance_client)
     # print(binance_adapter.set_symbol_leverage("PAXGUSDT", 3))
-    print(binance_adapter.get_net_value())
+    #print(binance_adapter.get_net_value())
     # print(binance_adapter.get_account_position_equity_ratio())
     # print(binance_adapter.get_um_account_info())
     # binance_adapter.cancel_all_orders("PAXGUSDT")

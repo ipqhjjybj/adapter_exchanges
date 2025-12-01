@@ -627,9 +627,9 @@ class LightAdapter(ExchangeAdapter):
         maxPrice = 10 ** 9
         adjusted_price = adjust_to_price_filter(
             Decimal(str(price)),
-            Decimal(minPrice),
-            Decimal(maxPrice),
-            Decimal(round(0.1 ** priceDecimal, priceDecimal)),
+            Decimal(str(minPrice)),
+            Decimal(str(maxPrice)),
+            Decimal(str(round(0.1 ** priceDecimal, priceDecimal))),
             round_direction,
         )
         adjusted_price = round(float(adjusted_price), priceDecimal)
@@ -655,9 +655,9 @@ class LightAdapter(ExchangeAdapter):
         maxQty = 10 ** 9
         adjusted_qty = adjust_to_lot_size(
             Decimal(str(quantity)),
-            Decimal(minQty),
-            Decimal(maxQty),
-            Decimal(round(0.1 ** sizeDecial, sizeDecial)),
+            Decimal(str(minQty)),
+            Decimal(str(maxQty)),
+            Decimal(str(round(0.1 ** sizeDecial, sizeDecial))),
         )
         adjusted_qty = round(float(adjusted_qty), sizeDecial)
         logger.info(
@@ -797,7 +797,7 @@ class LightAdapter(ExchangeAdapter):
                     account = data.get("accounts", [{}])[0]
 
                     # 1. 计算 margin_balance（保证金余额）
-                    margin_balance = data["accounts"][0]["available_balance"]
+                    margin_balance = float(data["accounts"][0]["available_balance"])
 
                     # 2. 计算 initial_margin（初始保证金）和 maint_margin（维持保证金）
                     initial_margin = 0.0
@@ -864,7 +864,7 @@ if __name__ == "__main__":
     #print(lighter_adapter.get_orderbook_ticker("ETHUSDT"))
     #print(lighter_adapter.get_depth("ETHUSDT"))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
-    print(lighter_adapter.place_market_open_order("ETHUSDT", "SELL", "SHORT", 0.1))
+    #print(lighter_adapter.place_market_open_order("ETHUSDT", "SELL", "SHORT", 0.1))
     #print(lighter_adapter.get_account_info()
     #print(lighter_adapter.query_position("ETHUSDT"))
 
@@ -883,15 +883,17 @@ if __name__ == "__main__":
 
     #print(lighter_adapter.query_all_um_open_orders("ETHUSDT"))
 
-    #print(lighter_adapter.get_um_account_info())
+    print(lighter_adapter.get_um_account_info())
 
     #lighter_adapter.close()
 
     #lighter_adapter.get_account_info()
 
-    # print(lighter_adapter.adjust_order_price("ETHUSDT", 3.3333, "UP"))
+    #print(lighter_adapter.adjust_order_price("ETHUSDT", 3.3333, "UP"))
 
-    # print(lighter_adapter.adjust_order_qty("ETHUSDT", 3.3333333))
+    #print(lighter_adapter.adjust_order_qty("ETHUSDT", 3.3333333))
+
+    #print(lighter_adapter.adjust_order_qty("ETHUSDT", 0.1))
 
     pass
 
