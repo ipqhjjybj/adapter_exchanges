@@ -60,16 +60,16 @@ def default_example_setup(config_file="./api_key_config.json") -> Optional[Tuple
     return client, api_client, websockets.connect(f"{base_url.replace('https', 'wss')}/stream")
 
 
-async def ws_ping(ws_client: websockets.ClientConnection):
+async def ws_ping(ws_client):
     await ws_client.send(json.dumps({"type": "pong"}))
 
-async def ws_subscribe(ws_client: websockets.ClientConnection, channel: str, auth: Optional[str] = None):
+async def ws_subscribe(ws_client, channel: str, auth: Optional[str] = None):
     if auth is None:
         await ws_client.send(json.dumps({"type": "subscribe", "channel": channel}))
     else:
         await ws_client.send(json.dumps({"type": "subscribe", "channel": channel, "auth": auth}))
 
-async def ws_send_tx(ws_client: websockets.ClientConnection, tx_type, tx_info, tx_hash):
+async def ws_send_tx(ws_client, tx_type, tx_info, tx_hash):
     # Note: you have the TX Hash from signing the TX
     # You can use this TX Hash to check the status of the TX later on
     # if the server generates a different hash, the signature will fail, so the hash will always be correct
@@ -90,7 +90,7 @@ async def ws_send_tx(ws_client: websockets.ClientConnection, tx_type, tx_info, t
     print(f"expectedHash {tx_hash} response {await ws_client.recv()}")
 
 
-async def ws_send_batch_tx(ws_client: websockets.ClientConnection, tx_types, tx_infos, tx_hashes):
+async def ws_send_batch_tx(ws_client, tx_types, tx_infos, tx_hashes):
     # Note: you have the TX Hash from signing the TX
     # You can use this TX Hash to check the status of the TX later on
     # if the server generates a different hash, the signature will fail, so the hash will always be correct
