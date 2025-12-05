@@ -112,25 +112,6 @@ async def ws_send_batch_tx(ws_client, tx_types, tx_infos, tx_hashes):
 
 
 
-def default_example_setup(config_file="./api_key_config.json") -> Optional[Tuple[lighter.SignerClient, lighter.ApiClient, websockets.connect]]:
-    logging.basicConfig(level=logging.DEBUG)
-
-    base_url, account_index, private_keys = get_api_key_config(config_file)
-    api_client = lighter.ApiClient(configuration=lighter.Configuration(host=base_url))
-    client = lighter.SignerClient(
-        url=base_url,
-        account_index=account_index,
-        api_private_keys=private_keys,
-    )
-
-    err = client.check_client()
-    if err is not None:
-        print(f"CheckClient error: {trim_exception(err)}")
-        return
-
-    return client, api_client, websockets.connect(f"{base_url.replace('https', 'wss')}/stream")
-
-
 async def main():
     client, api_client, ws_client_promise = default_example_setup()
 
