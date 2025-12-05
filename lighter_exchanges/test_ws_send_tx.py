@@ -51,7 +51,7 @@ def default_example_setup(config_file="./api_key_config.json"):
     return client, api_client, websockets.connect(f"{base_url.replace('https', 'wss')}/stream")
 
 
-async def ws_send_tx(ws_client: websockets.ClientConnection, tx_type, tx_info):
+async def ws_send_tx(ws_client, tx_type, tx_info):
     await ws_client.send(
         json.dumps(
             {
@@ -73,7 +73,7 @@ async def main():
     client, api_client, ws_client_promise = default_example_setup()
 
     # setup WS client and print connected message
-    ws_client: websockets.ClientConnection = await ws_client_promise
+    ws_client = await ws_client_promise
     print("Received:", await ws_client.recv())
 
     # create order
