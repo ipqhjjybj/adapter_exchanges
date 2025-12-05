@@ -1,5 +1,4 @@
 import json
-import websockets
 import asyncio
 
 import lighter
@@ -32,7 +31,7 @@ def get_api_key_config(config_file="./api_key_config.json"):
     return cfg["baseUrl"], cfg["apiKeyPrivateKey"], cfg["accountIndex"], cfg["apiKeyIndex"]
 
 
-def default_example_setup(config_file="./api_key_config.json") -> (lighter.ApiClient, lighter.SignerClient, websockets.ClientConnection):
+def default_example_setup(config_file="./api_key_config.json"):
     logging.basicConfig(level=logging.DEBUG)
 
     base_url, api_key_private_key, account_index, api_key_index = get_api_key_config(config_file)
