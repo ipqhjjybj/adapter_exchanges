@@ -12,7 +12,7 @@ async def websocket_client():
         message = json.dumps({
             "type": "jsonapi/sendtx",
             "data": {
-                "tx_type": 0,
+                "tx_type": 56,
                 "tx_info": {
                     "hash": "0xabc123456789def",
                     "type": 56,
