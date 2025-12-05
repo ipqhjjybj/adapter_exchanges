@@ -2,5 +2,8 @@
     "baseUrl": "https://mainnet.zklighter.elliot.ai",
     "apiKeyPrivateKey": "30fcc8c138945c600d3de1b95331c8a932f65007cb9e844e1f358b3234dd8396d3c8d8f90a8a0579",
     "accountIndex": 647741,
-    "apiKeyIndex": 3
+    "apiKeyIndex": 3,
+    "privateKeys": [
+        "30fcc8c138945c600d3de1b95331c8a932f65007cb9e844e1f358b3234dd8396d3c8d8f90a8a0579"
+    ]
 }
