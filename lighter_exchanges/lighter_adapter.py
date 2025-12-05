@@ -861,7 +861,9 @@ if __name__ == "__main__":
     # lighter_adapter.judge_auth_token_expired()
     # print(lighter_adapter.auth_token)
 
-    #print(lighter_adapter.get_orderbook_ticker("ETHUSDT"))
+    while True:
+        print(lighter_adapter.get_orderbook_ticker("PAXGUSDT"))
+        time.sleep(0.1)
     #print(lighter_adapter.get_depth("ETHUSDT"))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "SELL", "SHORT", 0.1))
@@ -883,7 +885,7 @@ if __name__ == "__main__":
 
     #print(lighter_adapter.query_all_um_open_orders("ETHUSDT"))
 
-    print(lighter_adapter.get_um_account_info())
+    #print(lighter_adapter.get_um_account_info())
 
     #lighter_adapter.close()
 
