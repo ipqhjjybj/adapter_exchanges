@@ -11,7 +11,7 @@ import time
 from collections import defaultdict
 
 sys.path.append("/Users/shenzhuoheng/quant_yz/git/adapter_exchanges")
-
+sys.path.append("/home/ec2-user/test_lighter_dex/adapter_exchanges")
 import lighter
 #import lighter_my as lighter
 from src.data_types import (
