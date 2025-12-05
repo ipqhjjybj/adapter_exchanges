@@ -35,6 +35,7 @@ def default_example_setup(config_file="./api_key_config.json"):
     logging.basicConfig(level=logging.DEBUG)
 
     base_url, api_key_private_key, account_index, api_key_index = get_api_key_config(config_file)
+    print(base_url, api_key_private_key, account_index, api_key_index)
     api_client = lighter.ApiClient(configuration=lighter.Configuration(host=base_url))
     client = lighter.SignerClient(
         url=base_url,
