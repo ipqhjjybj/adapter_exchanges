@@ -15,9 +15,9 @@ def on_account_update(account_id, account):
 
 client = lighter.WsClient(
     order_book_ids=[0, 1],
-    account_ids=[1, 2],
-    #on_order_book_update=on_order_book_update,
-    on_account_update=on_account_update,
+    #account_ids=[1, 2],
+    on_order_book_update=on_order_book_update,
+    #on_account_update=on_account_update,
 )
 
 client.run()
