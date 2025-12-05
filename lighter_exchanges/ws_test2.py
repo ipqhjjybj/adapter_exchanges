@@ -15,7 +15,7 @@ async def websocket_client():
                 "tx_type": 0,
                 "tx_info": {
                     "hash": "0xabc123456789def",
-                    "type": 15,
+                    "type": 56,
                     "info": "{\"AccountIndex\":1,\"ApiKeyIndex\":2,\"MarketIndex\":3,\"Index\":404,\"ExpiredAt\":1700000000000,\"Nonce\":1234,\"Sig\":\"0xsigexample\"}",
                     "event_info": "{\"a\":1,\"i\":404,\"u\":123,\"ae\":\"\"}",
                     "status": 2,
