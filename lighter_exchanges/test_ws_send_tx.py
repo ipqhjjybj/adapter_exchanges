@@ -168,88 +168,88 @@ async def main():
 
     await ws_send_batch_tx(ws_client, tx_types, tx_infos, tx_hashes)
 
-    # In case we want to see the changes in the UI, sleep a bit
-    time.sleep(5)
+    # # In case we want to see the changes in the UI, sleep a bit
+    # time.sleep(5)
 
-    # since this is a new batch, we can request a fresh API key
-    api_key_index, nonce = client.nonce_manager.next_nonce()
-    cancel_tx_type, cancel_tx_info, cancel_tx_hash, error = client.sign_cancel_order(
-        market_index=market_index,
-        order_index=1001,  # the index of the order we want cancelled
-        nonce=nonce,
-        api_key_index=api_key_index,
-    )
+    # # since this is a new batch, we can request a fresh API key
+    # api_key_index, nonce = client.nonce_manager.next_nonce()
+    # cancel_tx_type, cancel_tx_info, cancel_tx_hash, error = client.sign_cancel_order(
+    #     market_index=market_index,
+    #     order_index=1001,  # the index of the order we want cancelled
+    #     nonce=nonce,
+    #     api_key_index=api_key_index,
+    # )
 
-    if error is not None:
-        print(f"Error signing first order (second batch): {trim_exception(error)}")
-        return
+    # if error is not None:
+    #     print(f"Error signing first order (second batch): {trim_exception(error)}")
+    #     return
 
-    # intentionally pass api_key_index to the client.nonce_manager so it increases the nonce, without changing the API key.
-    # in batch TXs, all TXs must come from the same API key.
-    api_key_index, nonce = client.nonce_manager.next_nonce(api_key_index)
-    new_ask_tx_type, new_ask_tx_info, new_ask_tx_hash, error = client.sign_create_order(
-        market_index=market_index,
-        client_order_index=1003,  # Different unique identifier
-        base_amount=2000,  # 0.2 ETH
-        price=5500_00,  # $5500
-        is_ask=True,
-        order_type=client.ORDER_TYPE_LIMIT,
-        time_in_force=client.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
-        reduce_only=False,
-        trigger_price=0,
-        nonce=nonce,
-        api_key_index=api_key_index,
-    )
+    # # intentionally pass api_key_index to the client.nonce_manager so it increases the nonce, without changing the API key.
+    # # in batch TXs, all TXs must come from the same API key.
+    # api_key_index, nonce = client.nonce_manager.next_nonce(api_key_index)
+    # new_ask_tx_type, new_ask_tx_info, new_ask_tx_hash, error = client.sign_create_order(
+    #     market_index=market_index,
+    #     client_order_index=1003,  # Different unique identifier
+    #     base_amount=2000,  # 0.2 ETH
+    #     price=5500_00,  # $5500
+    #     is_ask=True,
+    #     order_type=client.ORDER_TYPE_LIMIT,
+    #     time_in_force=client.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+    #     reduce_only=False,
+    #     trigger_price=0,
+    #     nonce=nonce,
+    #     api_key_index=api_key_index,
+    # )
 
-    if error is not None:
-        print(f"Error signing second order (second batch): {trim_exception(error)}")
-        return
+    # if error is not None:
+    #     print(f"Error signing second order (second batch): {trim_exception(error)}")
+    #     return
 
-    tx_types = [cancel_tx_type, new_ask_tx_type]
-    tx_infos = [cancel_tx_info, new_ask_tx_info]
-    tx_hashes = [cancel_tx_hash, new_ask_tx_hash]
+    # tx_types = [cancel_tx_type, new_ask_tx_type]
+    # tx_infos = [cancel_tx_info, new_ask_tx_info]
+    # tx_hashes = [cancel_tx_hash, new_ask_tx_hash]
 
-    await ws_send_batch_tx(ws_client, tx_types, tx_infos, tx_hashes)
+    # await ws_send_batch_tx(ws_client, tx_types, tx_infos, tx_hashes)
 
-    # In case we want to see the changes in the UI, sleep a bit
-    time.sleep(5)
+    # # In case we want to see the changes in the UI, sleep a bit
+    # time.sleep(5)
 
-    # since this is a new batch, we can request a fresh API key
-    api_key_index, nonce = client.nonce_manager.next_nonce()
-    cancel_1_tx_type, cancel_1_tx_info, cancel_1_tx_hash, error = client.sign_cancel_order(
-        market_index=market_index,
-        order_index=1002,  # the index of the order we want cancelled
-        nonce=nonce,
-        api_key_index=api_key_index,
-    )
+    # # since this is a new batch, we can request a fresh API key
+    # api_key_index, nonce = client.nonce_manager.next_nonce()
+    # cancel_1_tx_type, cancel_1_tx_info, cancel_1_tx_hash, error = client.sign_cancel_order(
+    #     market_index=market_index,
+    #     order_index=1002,  # the index of the order we want cancelled
+    #     nonce=nonce,
+    #     api_key_index=api_key_index,
+    # )
 
-    if error is not None:
-        print(f"Error signing first order (third batch): {trim_exception(error)}")
-        return
+    # if error is not None:
+    #     print(f"Error signing first order (third batch): {trim_exception(error)}")
+    #     return
 
-    api_key_index, nonce = client.nonce_manager.next_nonce(api_key_index)
-    cancel_2_tx_type, cancel_2_tx_info, cancel_2_tx_hash, error = client.sign_cancel_order(
-        market_index=market_index,
-        order_index=1003,  # the index of the order we want cancelled
-        nonce=nonce,
-        api_key_index=api_key_index,
-    )
+    # api_key_index, nonce = client.nonce_manager.next_nonce(api_key_index)
+    # cancel_2_tx_type, cancel_2_tx_info, cancel_2_tx_hash, error = client.sign_cancel_order(
+    #     market_index=market_index,
+    #     order_index=1003,  # the index of the order we want cancelled
+    #     nonce=nonce,
+    #     api_key_index=api_key_index,
+    # )
 
-    if error is not None:
-        print(f"Error signing second order (third batch): {trim_exception(error)}")
-        return
+    # if error is not None:
+    #     print(f"Error signing second order (third batch): {trim_exception(error)}")
+    #     return
 
-    tx_types = [cancel_1_tx_type, cancel_2_tx_type]
-    tx_infos = [cancel_1_tx_info, cancel_2_tx_info]
-    tx_hashes = [cancel_1_tx_hash, cancel_2_tx_hash]
+    # tx_types = [cancel_1_tx_type, cancel_2_tx_type]
+    # tx_infos = [cancel_1_tx_info, cancel_2_tx_info]
+    # tx_hashes = [cancel_1_tx_hash, cancel_2_tx_hash]
 
-    await ws_send_batch_tx(ws_client, tx_types, tx_infos, tx_hashes)
+    # await ws_send_batch_tx(ws_client, tx_types, tx_infos, tx_hashes)
 
 
-    # Clean up
-    await client.close()
-    await api_client.close()
-    await ws_client.close()
+    # # Clean up
+    # await client.close()
+    # await api_client.close()
+    # await ws_client.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
