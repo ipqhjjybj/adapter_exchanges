@@ -120,7 +120,9 @@ async def main():
     print("Received:", await ws_client.recv())
 
     # Note: change this to 2048 to trade spot ETH. Make sure you have at least 0.1 ETH to trade spot.
-    market_index = 2048
+    #market_index = 2048
+    # ETH
+    market_index = 0
 
     api_key_index, nonce = client.nonce_manager.next_nonce()
     ask_tx_type, ask_tx_info, ask_tx_hash, error = client.sign_create_order(
