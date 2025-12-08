@@ -40,12 +40,14 @@ class LighterDepthReceiver:
         reconnect_interval: float = 5.0,
         ping_interval: int = 60,
         ping_timeout: int = 30,
+        heartbeat_timeout: int = 180,
     ):
         self.market_ids = market_ids
         self.market_symbol_map = market_symbol_map or {}
         self.reconnect_interval = reconnect_interval
         self.ping_interval = ping_interval
         self.ping_timeout = ping_timeout
+        self.heartbeat_timeout = heartbeat_timeout
 
         self.converter = LighterToTardisConverter(self.market_symbol_map)
         self._running = False
@@ -105,15 +107,15 @@ class LighterDepthReceiver:
     def _heartbeat_loop(self, ws_ref):
         """心跳检测线程：检查是否长时间没收到消息"""
         while self._running:
-            time.sleep(30)
+            time.sleep(60)
             # 检查 ws 是否还是同一个连接
             if not self._running or self._ws is not ws_ref:
                 break
-            # 如果超过 90 秒没收到消息，主动关闭连接触发重连
+            # 如果超过 heartbeat_timeout 秒没收到消息，主动关闭连接触发重连
             if self._last_message_time > 0:
                 elapsed = time.time() - self._last_message_time
-                if elapsed > 90:
-                    logger.warning(f"No message received for {elapsed:.1f}s, closing connection...")
+                if elapsed > self.heartbeat_timeout:
+                    logger.warning(f"No message received for {elapsed:.1f}s (timeout: {self.heartbeat_timeout}s), closing connection...")
                     try:
                         ws_ref.close()
                     except Exception:
@@ -151,6 +153,10 @@ class LighterDepthReceiver:
                     timestamp = data.get("timestamp", 0)
                     is_snapshot = (msg_type == "subscribed/order_book")
                     self._handle_orderbook_update(market_id, order_book, timestamp, is_snapshot)
+                elif msg_type == "ping":
+                    # 服务器发送应用层 ping，需要回复 pong
+                    ws.send(json.dumps({"type": "pong"}))
+                    logger.debug("Received ping, sent pong")
                 elif msg_type == "pong":
                     logger.debug("Received pong")
                 elif msg_type == "error":
@@ -170,6 +176,7 @@ class LighterDepthReceiver:
 
         def on_ping(ws, message):
             logger.debug("Received ping, sending pong")
+            self._last_message_time = time.time()
             # websocket-client 会自动回复 pong
 
         def on_pong(ws, message):
