@@ -144,6 +144,7 @@ class LighterDepthReceiver:
             self._last_message_time = time.time()
             try:
                 data = json.loads(message)
+                #print(data)
                 msg_type = data.get("type", "")
                 # 处理订阅确认消息(快照)和增量更新消息
                 if msg_type in ("subscribed/order_book", "update/order_book"):
@@ -223,7 +224,6 @@ class LighterDepthReceiver:
             if self._running:
                 logger.info(f"Reconnecting in {self.reconnect_interval}s...")
                 time.sleep(self.reconnect_interval)
-                self.converter.reset_state()  # 重连时重置状态
 
     def stop(self):
         """停止接收器"""

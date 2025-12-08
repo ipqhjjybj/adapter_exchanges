@@ -258,12 +258,13 @@ def format_timestamp(ts_us: int) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="从 L2 数据重建订单簿并检测异常")
-    parser.add_argument("csv_file", help="L2 CSV 文件路径")
+    #parser.add_argument("csv_file", help="L2 CSV 文件路径")
     parser.add_argument("--top", type=int, default=5, help="显示前 N 档盘口 (默认: 5)")
     parser.add_argument("--verbose", action="store_true", help="显示详细信息")
     parser.add_argument("--jump-threshold", type=float, default=100.0, help="价格跳跃阈值 (bps, 默认: 100)")
     parser.add_argument("--max-anomalies", type=int, default=50, help="最多显示的异常数量 (默认: 50)")
     args = parser.parse_args()
+    args.csv_file = "/home/ec2-user/test_lighter_dex/adapter_exchanges/data/lighter_book_snapshot_l2_PAXGUSDT_2025-12-08.csv"
 
     print(f"正在处理文件: {args.csv_file}")
     print(f"价格跳跃阈值: {args.jump_threshold} bps")
