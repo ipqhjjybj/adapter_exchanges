@@ -4,3 +4,5 @@ logs
 *.csv
 __pycache__
 data
+nohup.out
+*.log
