@@ -33,14 +33,14 @@ async def websocket_client():
         #     }
         # })
 
-        message = json.dumps({
-            "type": "subscribe",
-            "channel": "trade/0"
-        })
         # message = json.dumps({
         #     "type": "subscribe",
-        #     "channel": "order_book/0"
+        #     "channel": "trade/0"
         # })
+        message = json.dumps({
+            "type": "subscribe",
+            "channel": "order_book/0"
+        })
         # 1. 发送消息到服务器
         # market_id = 48
         # message = json.dumps({"type": "subscribe", "channel": f"order_book/{market_id}"})
