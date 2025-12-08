@@ -74,11 +74,17 @@ class LightAdapter(ExchangeAdapter):
             async def _create_token_with_new_client():
                 t1 = time.time()
                 # 重新创建客户端
+                # new_client = lighter.SignerClient(
+                #     url=self.base_url,
+                #     private_key=self.apikey_private_key,
+                #     account_index=self.account_index,
+                #     api_key_index=self.api_key_index,
+                # )
+                private_keys = {int(self.api_key_index): self.apikey_private_key}
                 new_client = lighter.SignerClient(
                     url=self.base_url,
-                    private_key=self.apikey_private_key,
                     account_index=self.account_index,
-                    api_key_index=self.api_key_index,
+                    api_private_keys=private_keys,
                 )
                 t2 = time.time()
                 print(t2 - t1)
@@ -854,17 +860,18 @@ if __name__ == "__main__":
     import os 
     
     lighter_adapter = LightAdapter(
-        l1_address="0xA2C9f815302d32757688eB0D6466466105682F54",
-        apikey_private_key="9d0a9b5f993c919fd8c2b63598be0753f05dc00ae6fbc2081a180a991bfd360822bcf95322e6e50a",
-        api_key_index=2
+        l1_address="0xCd3B989f0F582d52B785E51e189d072e272AaaaA",
+        apikey_private_key="30fcc8c138945c600d3de1b95331c8a932f65007cb9e844e1f358b3234dd8396d3c8d8f90a8a0579",
+        api_key_index=3
     )
 
-    # lighter_adapter.judge_auth_token_expired()
-    # print(lighter_adapter.auth_token)
+    lighter_adapter.judge_auth_token_expired()
+    print(lighter_adapter.auth_token)
+    pass
 
-    while True:
-        print(lighter_adapter.get_orderbook_ticker("PAXGUSDT"))
-        time.sleep(0.1)
+    # while True:
+    #     print(lighter_adapter.get_orderbook_ticker("PAXGUSDT"))
+    #     time.sleep(0.1)
     #print(lighter_adapter.get_depth("ETHUSDT"))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "SELL", "SHORT", 0.1))
