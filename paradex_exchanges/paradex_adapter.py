@@ -798,7 +798,27 @@ class ParadexAdapter(ExchangeAdapter):
         """
         设置合约杠杆
         """
-        raise NotImplementedError("Paradex交易所不支持设置合约杠杆-先不实现")
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}", "Content-Type": "application/json"}
+            url = f"{self.base_url}/account/margin/{symbol}"
+
+            data = {
+                "margin_type": "CROSS",
+                "leverage": leverage,
+            }
+            response = requests.post(url, proxies=self.proxies, json=data, headers=headers)
+            status_code = response.status_code
+            
+            if status_code == 200:
+                return AdapterResponse(success=True, data=response.json(), error_msg="")
+            else:
+                logger.error(f"设置杠杠: {response.text}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(response.text))
+
+        except Exception as e:
+            logger.error(f"设置杠杠失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     def get_um_account_info(self) -> AdapterResponse[UmAccountInfo]:
         """
@@ -860,8 +880,8 @@ if __name__ == "__main__":
     #data = api.get_orderbook_ticker(symbol)
     # data = api.get_depth(symbol)
     # print(data)
-    #print(api.get_account_info())
-    print(api.get_net_value())
+    # print(api.get_account_info())
+    # print(api.get_net_value())
 
     # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
     # print(data)
@@ -890,8 +910,12 @@ if __name__ == "__main__":
     # data = api.query_all_um_open_orders(symbol)
     # print(data)
 
-    data = api.get_um_account_info()
+    data = api.set_symbol_leverage(symbol, 10)
     print(data)
+
+    # data = api.get_um_account_info()
+    # print(data)
+
     pass
     
 
