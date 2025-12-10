@@ -413,7 +413,56 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        pass
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}"}
+            url = f"{self.base_url}/orders/{order_id}"
+
+            response = requests.get(url, headers=headers)
+            status_code = response.status_code
+            
+            if status_code == 200:
+                response_json = response.json()
+                status_text = response_json["status"]
+                if status_text in ["NEW", "OPEN", "remaining_size"]:
+                    status = OrderStatus.NEW
+                    if float(response_json["remaining_size"]) < float(response_json["size"]):
+                        status = OrderStatus.PARTIALLY_FILLED
+                elif status_text in ["CLOSED"]:
+                    if float(response_json["remaining_size"]) > 0:
+                        status = OrderStatus.CANCELED
+                    else:
+                        status = OrderStatus.FILLED
+                else:
+                    raise ValueError(f"未知订单状态: {status_text}")
+                
+                side = response_json["side"]
+                position_side = "open"
+                avg_fill_price = 0
+                if len(response_json["avg_fill_price"]) > 0:
+                    avg_fill_price = float(response_json["avg_fill_price"])
+            
+                order_info = OrderInfo(
+                    order_id=response_json["id"],
+                    timestamp=response_json["timestamp"],
+                    symbol=symbol,
+                    status=status,
+                    side=side,
+                    position_side=position_side,
+                    filled_qty=float(response_json["size"]) - float(response_json["remaining_size"]),
+                    avg_price=avg_fill_price,
+                    order_qty=float(response_json["size"]),
+                    order_price=float(response_json["price"]),
+                    api_resp=response_json,
+                )
+                return AdapterResponse(success=True, data=order_info, error_msg="")
+            else:
+                logger.error(f"查询订单失败: {response.text}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(response.text))
+
+        except Exception as e:
+            logger.error(f"查询订单失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     def cancel_order(
         self, symbol: str, order_id: str
@@ -507,8 +556,19 @@ class ParadexAdapter(ExchangeAdapter):
             
             if status_code == 201:
                 logger.info(f"Order Created: {status_code} | Response: {response_json}")
+
+                order_placement_result = OrderPlacementResult(
+                    symbol=symbol,
+                    order_id=response_json["id"],
+                    order_qty=quantity,
+                    order_price=price,
+                    side=side,
+                    position_side=position_side,
+                    api_resp=response_json,
+                )
+
                 return AdapterResponse(
-                    success=True, data=response_json, error_msg=""
+                    success=True, data=order_placement_result, error_msg=""
                 )
             else:
                 logger.warning(f"Unable to [POST] /orders Status Code:{status_code}")
@@ -681,15 +741,17 @@ if __name__ == "__main__":
     #print(api.get_account_info())
     #print(api.get_net_value())
 
-    # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003, price=2000)
+    # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.002, price=2000)
     # print(data)
 
     # data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
     # print(data)
 
-    data = api.query_position(symbol=symbol)
+    # data = api.query_position(symbol=symbol)
+    # print(data)
+    
+    data = api.query_order(symbol=symbol, order_id="1765331364580201709274590000")
     print(data)
-    pass
 
     
 
