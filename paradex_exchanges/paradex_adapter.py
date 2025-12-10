@@ -796,7 +796,47 @@ class ParadexAdapter(ExchangeAdapter):
         """
         获取账户信息
         """
-        pass
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}"}
+
+            url = self.base_url + '/account'
+
+            logger.info(f"GET {url}")
+            logger.info(f"Headers: {headers}")
+
+            response = requests.get(url, headers=headers, timeout=60)
+            status_code: int = response.status_code
+            response_json: Dict = response.json()
+            
+            if status_code == 200:
+                
+                initial_margin = float(response_json['initial_margin_requirement'])
+                maint_margin = float(response_json['maintenance_margin_requirement'])
+                margin_balance = float(response_json['total_collateral'])
+                timenow = int(time.time() * 1000)
+                um_account_info = UmAccountInfo(
+                    timestamp=timenow,
+                    initial_margin=initial_margin,
+                    maint_margin=maint_margin,
+                    margin_balance=margin_balance,
+                    initial_margin_rate=margin_balance /initial_margin  if initial_margin > 0 else 999,
+                    maint_margin_rate=margin_balance /maint_margin if maint_margin > 0 else 999,
+                    api_resp=response_json,
+                )
+                return AdapterResponse(success=True, data=um_account_info, error_msg="")
+            else:
+                logger.error(f"Status Code: {status_code}")
+                logger.error("Unable to GET /account")
+                logger.error(f"获取净价值失败: {response_json}")
+                return AdapterResponse(success=False, data=None, error_msg=f"{response_json}")
+        except Exception as e:
+            logger.error(f"获取净价值失败: {e}", exc_info=True)
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e),
+            )
 
 
 if __name__ == "__main__":
@@ -813,7 +853,7 @@ if __name__ == "__main__":
     # data = api.get_depth(symbol)
     # print(data)
     #print(api.get_account_info())
-    #print(api.get_net_value())
+    print(api.get_net_value())
 
     # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
     # print(data)
@@ -842,6 +882,8 @@ if __name__ == "__main__":
     # data = api.query_all_um_open_orders(symbol)
     # print(data)
 
+    data = api.get_um_account_info()
+    print(data)
     pass
     
 
