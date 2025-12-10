@@ -2,6 +2,7 @@ import aiohttp
 import asyncio
 import hashlib
 import random
+import math
 import re
 import time
 from enum import IntEnum
@@ -72,6 +73,7 @@ class ParadexAdapter(ExchangeAdapter):
     def __init__(self, paradex_account_address, paradex_account_private_key):
         # 初始化基础URL
         self.base_url = "https://api.prod.paradex.trade/v1"
+        self.headers = {"accept": "application/json"}
         
         self.paradex_account_address = paradex_account_address
         self.paradex_account_private_key = paradex_account_private_key
@@ -79,6 +81,15 @@ class ParadexAdapter(ExchangeAdapter):
         # 创建token
         self.next_expiry_timestamp = 0
         self.jwt_token = None
+
+        # 更新交易所信息
+        price_decimal_dic, size_decimal_dic, min_notional_dic = self.get_exchange_info()
+        self.price_decimal_dic = price_decimal_dic
+        self.size_decimal_dic = size_decimal_dic
+        self.min_notional_dic = min_notional_dic
+
+        assert len(price_decimal_dic) > 0, "get_exchange_info error"
+        assert len(size_decimal_dic) > 0, "get_exchange_info error"
     
     def get_paradex_config_sync(self) -> Dict:
         """
@@ -165,14 +176,32 @@ class ParadexAdapter(ExchangeAdapter):
                 logger.error(f"Error getting JWT token: {e}")
                 import traceback
                 traceback.print_exc()
+    
+    def get_exchange_info(self):
+        url = f"{self.base_url}/markets"
+        data = requests.get(url, headers=self.headers, timeout=60)
+        if data.status_code == 200:
+            js_data = data.json()
+            results = js_data["results"]
 
-            
-    # @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
-    # def get_account_info(self):
-    #     """
-    #     获得账户信息
-    #     """
-        
+            price_decimal_dic = {}
+            size_decimal_dic = {}
+            min_notional_dic = {}
+            for dic in results:
+                symbol = dic["symbol"]
+                base_currency = dic["base_currency"]
+                quote_currency = dic["quote_currency"]
+                asset_kind = dic["asset_kind"]
+                order_size_increment = dic["order_size_increment"]
+                price_tick_size = dic["price_tick_size"]
+                min_notional = dic["min_notional"]
+                if asset_kind == "PERP" and quote_currency == "USD":
+                    price_decimal_dic[symbol] = -math.log10(float(price_tick_size))
+                    size_decimal_dic[symbol] = -math.log10(float(order_size_increment))
+                    min_notional_dic[symbol] = float(min_notional)
+            return price_decimal_dic, size_decimal_dic, min_notional_dic
+        else:
+            return {}, {}, {}
     
     def get_client_order_id(self):
         """获得client_order_id"""
@@ -190,7 +219,36 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含错误信息的响应
         """
-        pass
+        url = f"{self.base_url}/orderbook/{symbol}"
+        data = requests.get(url, headers=self.headers, timeout=60)
+        if data.status_code == 200:
+            js_data = data.json()
+            
+            bids = js_data["bids"]
+            asks = js_data["asks"]
+
+            bids_arr = sorted(bids, key=lambda x: float(x[0]), reverse=True)
+            asks_arr = sorted(asks, key=lambda x: float(x[0]))
+            if len(bids_arr) == 0 or len(asks_arr) == 0:
+                return AdapterResponse(success=False, data=None, error_msg="bids or asks is empty")
+            else:
+                return AdapterResponse(
+                    success=True,
+                    data=BookTicker(
+                        symbol=symbol,
+                        time=int(time.time() * 1000),
+                        bid_price=float(bids_arr[0][0]),
+                        ask_price=float(asks_arr[0][0]),
+                        ask_size=float(asks_arr[0][1]),
+                        bid_size=float(bids_arr[0][1]),
+                    ),
+                    error_msg=None,
+                )
+        else:
+            e = data.text
+            logger.error(f"获取盘口价格失败: {e}")
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
+        
     
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def get_depth(self, symbol: str, limit: int=100) -> AdapterResponse[BookTicker]:
@@ -384,8 +442,7 @@ class ParadexAdapter(ExchangeAdapter):
         """
         获取合约交易单位
         """
-        size_decimal = self.size_decimal_dic[symbol]
-        return AdapterResponse(success=True, data=0.1 ** size_decimal, error_msg="")
+        pass
 
 
     def cancel_all_orders(self, symbol: str) -> AdapterResponse[bool]:
@@ -422,6 +479,9 @@ if __name__ == "__main__":
     paradex_account_private_key = "0x7fcc70496c609c985e7033692896f838f161e1f4205990d9ad51e1c114fbf70"
     api = ParadexAdapter(paradex_account_address, paradex_account_private_key)
     
+    symbol = "PAXG-USD-PERP"
+    data = api.get_orderbook_ticker(symbol)
+    print(data)
     #print(api.get_account_info())
-    print(api.get_net_value())
+    #print(api.get_net_value())
 
