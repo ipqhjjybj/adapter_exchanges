@@ -549,7 +549,21 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             float: 调整后的价格
         """
-        pass
+        priceDecimal = int(self.price_decimal_dic[symbol])
+        minPrice = round(0.1 ** priceDecimal, priceDecimal)
+        maxPrice = 10 ** 9
+        adjusted_price = adjust_to_price_filter(
+            Decimal(str(price)),
+            Decimal(str(minPrice)),
+            Decimal(str(maxPrice)),
+            Decimal(str(round(0.1 ** priceDecimal, priceDecimal))),
+            round_direction,
+        )
+        adjusted_price = round(float(adjusted_price), priceDecimal)
+        logger.info(
+            f"按照交易所规则调整订单价格, 调整前价格为: {price}, 调整后价格为: {adjusted_price}"
+        )
+        return adjusted_price
         
 
     def adjust_order_qty(self, symbol: str, quantity: float) -> float:
@@ -563,7 +577,20 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             float: 调整后的数量
         """
-        pass
+        sizeDecial = int(self.size_decimal_dic[symbol])
+        minQty = round(0.1 ** sizeDecial, sizeDecial)
+        maxQty = 10 ** 9
+        adjusted_qty = adjust_to_lot_size(
+            Decimal(str(quantity)),
+            Decimal(str(minQty)),
+            Decimal(str(maxQty)),
+            Decimal(str(round(0.1 ** sizeDecial, sizeDecial))),
+        )
+        adjusted_qty = round(float(adjusted_qty), sizeDecial)
+        logger.info(
+            f"按照交易所规则调整订单数量, 调整前数量为: {quantity}, 调整后数量为: {adjusted_qty}"
+        )
+        return adjusted_qty
     
     def get_account_position_equity_ratio(self) -> AdapterResponse[float]:
         """
@@ -622,6 +649,10 @@ if __name__ == "__main__":
     #print(api.get_account_info())
     #print(api.get_net_value())
 
-    data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003, price=2000)
+    # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003, price=2000)
+    # print(data)
+
+
+    data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
     print(data)
 
