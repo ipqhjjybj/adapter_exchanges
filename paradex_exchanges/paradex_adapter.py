@@ -70,10 +70,18 @@ class ParadexAdapter(ExchangeAdapter):
     该类实现了与Lighter交易所的交互功能，包括订单管理、持仓查询、账户信息获取等
     """
     
-    def __init__(self, paradex_account_address, paradex_account_private_key):
+    def __init__(self, paradex_account_address, paradex_account_private_key, proxy_url=None):
         # 初始化基础URL
         self.base_url = "https://api.prod.paradex.trade/v1"
         self.headers = {"accept": "application/json"}
+
+        if proxy_url is not None:
+            self.proxies = {
+                "http": proxy_url,
+                "https": proxy_url
+            }
+        else:
+            self.proxies = None
         
         self.paradex_account_address = paradex_account_address
         self.paradex_account_private_key = paradex_account_private_key
@@ -105,7 +113,7 @@ class ParadexAdapter(ExchangeAdapter):
         
         headers = dict()
         
-        response = requests.get(self.base_url  + path, headers=headers, timeout=60)
+        response = requests.get(self.base_url + path, headers=headers, proxies=self.proxies, timeout=60)
         status_code: int = response.status_code
         response_json: Dict = response.json()
         
@@ -143,7 +151,7 @@ class ParadexAdapter(ExchangeAdapter):
         logger.info(f"POST {url}")
         logger.info(f"Headers: {headers}")
 
-        response = requests.post(url, headers=headers, timeout=60)
+        response = requests.post(url, headers=headers, proxies=self.proxies, timeout=60)
         status_code: int = response.status_code
         response_json: Dict = response.json()
         
@@ -182,7 +190,7 @@ class ParadexAdapter(ExchangeAdapter):
     
     def get_exchange_info(self):
         url = f"{self.base_url}/markets"
-        data = requests.get(url, headers=self.headers, timeout=60)
+        data = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             results = js_data["results"]
@@ -223,7 +231,7 @@ class ParadexAdapter(ExchangeAdapter):
             AdapterResponse: 包含错误信息的响应
         """
         url = f"{self.base_url}/orderbook/{symbol}"
-        data = requests.get(url, headers=self.headers, timeout=60)
+        data = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             
@@ -265,7 +273,7 @@ class ParadexAdapter(ExchangeAdapter):
             AdapterResponse: 包含错误信息的响应
         """
         url = f"{self.base_url}/orderbook/{symbol}?depth={limit}"
-        data = requests.get(url, headers=self.headers, timeout=60)
+        data = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             
@@ -371,7 +379,7 @@ class ParadexAdapter(ExchangeAdapter):
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/positions"
 
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code = response.status_code
             
             if status_code == 200:
@@ -418,7 +426,7 @@ class ParadexAdapter(ExchangeAdapter):
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/orders/{order_id}"
 
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, proxies=self.proxies, headers=headers)
             status_code = response.status_code
             
             if status_code == 200:
@@ -482,7 +490,7 @@ class ParadexAdapter(ExchangeAdapter):
         try:
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/orders/{order_id}"
-            response = requests.delete(url, headers=headers)
+            response = requests.delete(url, proxies=self.proxies, headers=headers)
             status_code = response.status_code
             
             if status_code == 204:
@@ -569,7 +577,7 @@ class ParadexAdapter(ExchangeAdapter):
             }
             url = self.base_url + "/orders"
 
-            response = requests.post(url, headers=headers, json=order_dict, timeout=60)
+            response = requests.post(url, headers=headers, json=order_dict, proxies=self.proxies,  timeout=60)
             status_code = response.status_code
             response_json = response.json()
             response_json["status_code"] = status_code
@@ -624,7 +632,7 @@ class ParadexAdapter(ExchangeAdapter):
             logger.info(f"GET {url}")
             logger.info(f"Headers: {headers}")
 
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code: int = response.status_code
             response_json: Dict = response.json()
             
@@ -719,7 +727,7 @@ class ParadexAdapter(ExchangeAdapter):
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/positions"
 
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code = response.status_code
             
             position_value = 0
@@ -762,7 +770,7 @@ class ParadexAdapter(ExchangeAdapter):
         try:
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/orders"
-            response = requests.delete(url, headers=headers)
+            response = requests.delete(url, proxies=self.proxies, headers=headers)
             status_code = response.status_code
 
             return AdapterResponse(success=True, data=response.json(), error_msg="")
@@ -779,7 +787,7 @@ class ParadexAdapter(ExchangeAdapter):
         try:
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/orders"
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code = response.status_code
             return AdapterResponse(success=True, data=response.json()["results"], error_msg="")
         except Exception as e:
@@ -805,7 +813,7 @@ class ParadexAdapter(ExchangeAdapter):
             logger.info(f"GET {url}")
             logger.info(f"Headers: {headers}")
 
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code: int = response.status_code
             response_json: Dict = response.json()
             
