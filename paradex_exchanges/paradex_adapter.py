@@ -61,7 +61,7 @@ from src.log_kit import logger
 from src.exchange_adapter import ExchangeAdapter
 
 from paradex_utils import build_auth_message, get_account
-
+from paradex_shared import order_sign_message, flatten_signature, Order, OrderType, OrderSide
 
 
 class ParadexAdapter(ExchangeAdapter):
@@ -81,6 +81,11 @@ class ParadexAdapter(ExchangeAdapter):
         # 创建token
         self.next_expiry_timestamp = 0
         self.jwt_token = None
+
+        # 系统config
+        self.paradex_config = self.get_paradex_config_sync()
+        assert self.paradex_config is not None, "get_paradex_config_sync error"
+        assert len(self.paradex_config) > 0, "get_paradex_config_sync error"
 
         # 更新交易所信息
         price_decimal_dic, size_decimal_dic, min_notional_dic = self.get_exchange_info()
@@ -159,12 +164,10 @@ class ParadexAdapter(ExchangeAdapter):
             logger.info("auth token near expired, re-create auth token")
             
             try:
-                paradex_config = self.get_paradex_config_sync()
-
                 # Call the synchronous get_jwt_token function
                 logger.info("Getting JWT token...")
                 jwt_token, expiry = self.get_jwt_token(
-                    paradex_config,
+                    self.paradex_config,
                     self.base_url,
                     paradex_account_address,
                     paradex_account_private_key,
@@ -205,7 +208,7 @@ class ParadexAdapter(ExchangeAdapter):
     
     def get_client_order_id(self):
         """获得client_order_id"""
-        return int(time.time() * 1000)
+        return str(time.time() * 1000)
     
 
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
@@ -305,7 +308,34 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        pass
+        # 验证订单方向
+        error_msg = self.validate_order_direction(side, position_side, is_open=True)
+        if error_msg:
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=error_msg,
+            )
+        
+        bookticker_response = self.get_orderbook_ticker(symbol)
+        if not bookticker_response.success:
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=bookticker_response.error_msg,
+            )
+        ask_price = bookticker_response.data.ask_price
+        bid_price = bookticker_response.data.bid_price
+
+        if side == "BUY":
+            price = ask_price * (1 + out_price_rate)
+        else:
+            price = bid_price * (1 - out_price_rate)
+
+        quantity = self.adjust_order_qty(symbol, quantity)
+        price = self.adjust_order_price(symbol, price)
+        
+        return self.place_limit_order(symbol, side, position_side, quantity, price)
     
     def place_market_close_order(
         self, symbol: str, side: str, position_side: str, quantity: float, out_price_rate: float = 0.005
@@ -322,7 +352,7 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        pass
+        return self.place_market_open_order(symbol, side, position_side, quantity, out_price_rate)
     
     
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
@@ -368,6 +398,33 @@ class ParadexAdapter(ExchangeAdapter):
         """
         pass
     
+    def sign_order_sync(self, paradex_config: Dict, account_address: str, private_key: str, order: Order) -> Tuple[str, str]:
+        """
+        Synchronous version of sign_order
+        """
+        chain_id = int_from_bytes(paradex_config["starknet_chain_id"].encode())
+        account = get_account(account_address, private_key, paradex_config)
+        message = order_sign_message(chain_id, order)
+        
+        sig = account.sign_message(message)
+        flat_sig = flatten_signature(sig)
+        return flat_sig
+    
+    def build_limit_order_sync(self, market: str, order_side: OrderSide, size: Decimal,  price: Decimal, client_id: str = "sync_order") -> Order:
+        """
+        Build a limit order
+        """
+        order = Order(
+            market=market,
+            order_type=OrderType.Limit,
+            order_side=order_side,
+            size=size,
+            limit_price=price,
+            client_id=client_id,
+            signature_timestamp=int(time.time() * 1000),
+        )
+        return order
+
     def place_limit_order(
         self, symbol: str, side: str, position_side: str, quantity: float, price: float
     ) -> AdapterResponse[OrderPlacementResult]:
@@ -384,7 +441,59 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        pass
+        self.judge_auth_token_expired()
+        try:
+            if side == "BUY":
+                order_side = OrderSide.Buy
+            else:
+                order_side = OrderSide.Sell
+            
+            size = Decimal(str(quantity))
+            price = Decimal(str(price))
+            client_id = self.get_client_order_id()
+
+            # Build the order
+            order = self.build_limit_order_sync(symbol, order_side, size, price, client_id)
+            # Sign the order
+            signature = self.sign_order_sync(self.paradex_config, self.paradex_account_address, self.paradex_account_private_key, order)
+            order.signature = signature
+
+            # Convert order to dict
+            order_dict = order.dump_to_dict()
+            
+            # Prepare headers
+            headers = {
+                "Authorization": f"Bearer {self.jwt_token}",
+                "Content-Type": "application/json"
+            }
+            url = self.base_url + "/orders"
+
+            response = requests.post(url, headers=headers, json=order_dict, timeout=60)
+            status_code = response.status_code
+            response_json = response.json()
+            response_json["status_code"] = status_code
+            
+            if status_code == 201:
+                logger.info(f"Order Created: {status_code} | Response: {response_json}")
+                return AdapterResponse(
+                    success=True, data=response_json, error_msg=""
+                )
+            else:
+                logger.warning(f"Unable to [POST] /orders Status Code:{status_code}")
+                logger.warning(f"Response: {response_json}")
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=f"Response: {response_json}",
+                )
+            
+        except Exception as e:
+            logger.error(f"下限价单失败: {e}")
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e),
+            )
     
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def get_net_value(self) -> AdapterResponse[float]:
@@ -508,8 +617,11 @@ if __name__ == "__main__":
     
     symbol = "PAXG-USD-PERP"
     #data = api.get_orderbook_ticker(symbol)
-    data = api.get_depth(symbol)
-    print(data)
+    # data = api.get_depth(symbol)
+    # print(data)
     #print(api.get_account_info())
     #print(api.get_net_value())
+
+    data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003, price=2000)
+    print(data)
 
