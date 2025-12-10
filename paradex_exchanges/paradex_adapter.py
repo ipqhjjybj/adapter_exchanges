@@ -236,7 +236,7 @@ class ParadexAdapter(ExchangeAdapter):
                     success=True,
                     data=BookTicker(
                         symbol=symbol,
-                        time=int(time.time() * 1000),
+                        time=js_data["last_updated_at"],
                         bid_price=float(bids_arr[0][0]),
                         ask_price=float(asks_arr[0][0]),
                         ask_size=float(asks_arr[0][1]),
@@ -251,7 +251,7 @@ class ParadexAdapter(ExchangeAdapter):
         
     
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
-    def get_depth(self, symbol: str, limit: int=100) -> AdapterResponse[BookTicker]:
+    def get_depth(self, symbol: str, limit: int=20) -> AdapterResponse[BookTicker]:
         """
         获取盘口价格
 
@@ -261,7 +261,34 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含错误信息的响应
         """
-        pass
+        url = f"{self.base_url}/orderbook/{symbol}?depth={limit}"
+        data = requests.get(url, headers=self.headers, timeout=60)
+        if data.status_code == 200:
+            js_data = data.json()
+            
+            bids = js_data["bids"]
+            asks = js_data["asks"]
+            bids = [[float(x[0]), float(x[1])] for x in bids]
+            asks = [[float(x[0]), float(x[1])] for x in asks]
+            bids_arr = sorted(bids, key=lambda x: float(x[0]), reverse=True)
+            asks_arr = sorted(asks, key=lambda x: float(x[0]))
+            if len(bids_arr) == 0 or len(asks_arr) == 0:
+                return AdapterResponse(success=False, data=None, error_msg="bids or asks is empty")
+            else:
+                return AdapterResponse(
+                    success=True,
+                    data=Depth(
+                        symbol=symbol,
+                        time=js_data["last_updated_at"],
+                        bids=bids_arr,
+                        asks=asks_arr,
+                    ),
+                    error_msg=None,
+                )
+        else:
+            e = data.text
+            logger.error(f"获取盘口价格失败: {e}")
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     def place_market_open_order(
         self, symbol: str, side: str, position_side: str, quantity: float, out_price_rate: float = 0.005
@@ -480,7 +507,8 @@ if __name__ == "__main__":
     api = ParadexAdapter(paradex_account_address, paradex_account_private_key)
     
     symbol = "PAXG-USD-PERP"
-    data = api.get_orderbook_ticker(symbol)
+    #data = api.get_orderbook_ticker(symbol)
+    data = api.get_depth(symbol)
     print(data)
     #print(api.get_account_info())
     #print(api.get_net_value())
