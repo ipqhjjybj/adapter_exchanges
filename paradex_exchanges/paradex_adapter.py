@@ -366,8 +366,40 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含持仓信息的响应
         """
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}"}
+            url = f"{self.base_url}/positions"
 
-        pass
+            response = requests.get(url, headers=headers, timeout=60)
+            status_code = response.status_code
+            
+            if status_code == 200:
+                response_json = response.json()
+                results = response_json["results"]
+
+                long_qty = 0
+                short_qty = 0
+                for result in results:
+                    if result["market"] == symbol:
+                        if result["side"] == "LONG":
+                            long_qty = abs(float(result["size"]))
+                        else:
+                            short_qty = abs(float(result["size"]))
+                symbol_position = SymbolPosition(
+                    symbol=symbol,
+                    long_qty=long_qty,
+                    short_qty=short_qty,
+                    api_resp=response_json,
+                )
+                return AdapterResponse(success=True, data=symbol_position, error_msg="")
+            else:
+                logger.error(f"查询持仓失败: {response.text}")
+                return AdapterResponse(success=False, data=None, error_msg=response.text)
+
+        except Exception as e:
+            logger.error(f"查询持仓失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def query_order(self, symbol: str, order_id: str) -> AdapterResponse[OrderInfo]:
@@ -652,7 +684,12 @@ if __name__ == "__main__":
     # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003, price=2000)
     # print(data)
 
+    # data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
+    # print(data)
 
-    data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
+    data = api.query_position(symbol=symbol)
     print(data)
+    pass
+
+    
 
