@@ -464,6 +464,7 @@ class ParadexAdapter(ExchangeAdapter):
             logger.error(f"查询订单失败: {e}", exc_info=True)
             return AdapterResponse(success=False, data=None, error_msg=str(e))
     
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def cancel_order(
         self, symbol: str, order_id: str
     ) -> AdapterResponse[OrderCancelResult]:
@@ -477,7 +478,26 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含取消结果的响应
         """
-        pass
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}"}
+            url = f"{self.base_url}/orders/{order_id}"
+            response = requests.delete(url, headers=headers)
+            status_code = response.status_code
+            
+            if status_code == 204:
+                cancel_dict = {
+                    "order_id": order_id,
+                    "api_resp": response.text,
+                }
+                return AdapterResponse(success=True, data=cancel_dict, error_msg="")
+            else:
+                logger.error(f"撤销订单失败: {response.text}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(response.text))
+
+        except Exception as e:
+            logger.error(f"取消所有订单失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     def sign_order_sync(self, paradex_config: Dict, account_address: str, private_key: str, order: Order) -> Tuple[str, str]:
         """
@@ -691,32 +711,86 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含净价值的响应
         """
-        pass
+        self.judge_auth_token_expired()
+        try:
+            net_value = self.get_net_value()
+            total_value = float(net_value.data)
+
+            headers = {"Authorization": f"Bearer {self.jwt_token}"}
+            url = f"{self.base_url}/positions"
+
+            response = requests.get(url, headers=headers, timeout=60)
+            status_code = response.status_code
+            
+            position_value = 0
+            if status_code == 200:
+                response_json = response.json()
+                results = response_json["results"]
+                for result in results: 
+                    position_value += abs(float(result["average_entry_price"]) * float(result['size']))
+            
+            if total_value == 0:
+                ratio = 9999
+            else:
+                ratio = position_value / total_value
+            
+            return AdapterResponse(success=True, data=ratio, error_msg="")
+            
+        except Exception as e:
+            logger.error(f"获取账户持仓保证金率失败: {e}", exc_info=True)
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e),
+            )
     
     def get_contract_trade_unit(self, symbol: str) -> AdapterResponse[float]:
         """
         获取合约交易单位
         """
-        pass
+        if symbol=="PAXG-USD-PERP":
+            return AdapterResponse(success=True, data=1, error_msg="")
+        else:
+            return AdapterResponse(success=False, data=None, error_msg="不支持的交易对")
 
 
     def cancel_all_orders(self, symbol: str) -> AdapterResponse[bool]:
         """
         取消所有订单
         """
-        pass
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}"}
+            url = f"{self.base_url}/orders"
+            response = requests.delete(url, headers=headers)
+            status_code = response.status_code
+
+            return AdapterResponse(success=True, data=response.json(), error_msg="")
+
+        except Exception as e:
+            logger.error(f"取消所有订单失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     def query_all_um_open_orders(self, symbol: str) -> AdapterResponse[list]:
         """
         查询所有未成交订单
         """
-        pass
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}"}
+            url = f"{self.base_url}/orders"
+            response = requests.get(url, headers=headers, timeout=60)
+            status_code = response.status_code
+            return AdapterResponse(success=True, data=response.json()["results"], error_msg="")
+        except Exception as e:
+            logger.error(f"查询所有未成交订单失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     def set_symbol_leverage(self, symbol: str, leverage: int) -> AdapterResponse[bool]:
         """
         设置合约杠杆
         """
-        pass
+        raise NotImplementedError("Paradex交易所不支持设置合约杠杆-先不实现")
     
     def get_um_account_info(self) -> AdapterResponse[UmAccountInfo]:
         """
@@ -741,7 +815,7 @@ if __name__ == "__main__":
     #print(api.get_account_info())
     #print(api.get_net_value())
 
-    # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.002, price=2000)
+    # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
     # print(data)
 
     # data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
@@ -750,8 +824,24 @@ if __name__ == "__main__":
     # data = api.query_position(symbol=symbol)
     # print(data)
     
-    data = api.query_order(symbol=symbol, order_id="1765331364580201709274590000")
-    print(data)
+    # data = api.query_order(symbol=symbol, order_id="1765331364580201709274590000")
+    # print(data)
 
+    # data = api.cancel_order(symbol=symbol, order_id="1765342177860201709197200001")
+    # print(data)
+
+    # data = api.cancel_all_orders(symbol=symbol)
+    # print(data)
+
+    # data = api.get_account_position_equity_ratio()
+    # print(data)
+
+    # data = api.get_contract_trade_unit(symbol)
+    # print(data)
+
+    # data = api.query_all_um_open_orders(symbol)
+    # print(data)
+
+    pass
     
 
