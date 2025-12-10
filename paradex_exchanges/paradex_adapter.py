@@ -910,7 +910,7 @@ if __name__ == "__main__":
     # data = api.query_all_um_open_orders(symbol)
     # print(data)
 
-    data = api.set_symbol_leverage(symbol, 10)
+    data = api.set_symbol_leverage(symbol, 20)
     print(data)
 
     # data = api.get_um_account_info()
