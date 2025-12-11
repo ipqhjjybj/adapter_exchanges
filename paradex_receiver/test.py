@@ -20,14 +20,14 @@ message = {
   },
   "id": 1
 }
-message = {
-  "jsonrpc": "2.0",
-  "method": "subscribe",
-  "params": {
-    "channel": "order_book.PAXG-USD-PERP.snapshot@15@50ms@0_01"
-  },
-  "id": 1
-}
+# message = {
+#   "jsonrpc": "2.0",
+#   "method": "subscribe",
+#   "params": {
+#     "channel": "order_book.PAXG-USD-PERP.snapshot@15@50ms@0_01"
+#   },
+#   "id": 1
+# }
 # Define a callback to check connection success
 def on_open(ws):
     # Auth first

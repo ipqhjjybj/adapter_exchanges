@@ -165,3 +165,82 @@ class ParadexOrderBookMessage:
         # 按价格从低到高排序
         asks.sort(key=lambda x: float(x.price))
         return asks[:15]  # 取前15档
+
+
+@dataclass
+class TardisTrade:
+    """
+    Tardis 交易记录
+    
+    CSV 格式: exchange,symbol,timestamp,local_timestamp,id,side,price,amount
+    """
+    exchange: str
+    symbol: str
+    timestamp: int  # 微秒
+    local_timestamp: int  # 微秒
+    id: str
+    side: Literal["buy", "sell"]
+    price: str
+    amount: str
+
+    def to_csv_row(self) -> str:
+        return f"{self.exchange},{self.symbol},{self.timestamp},{self.local_timestamp},{self.id},{self.side},{self.price},{self.amount}"
+
+    def to_dict(self) -> dict:
+        return {
+            "exchange": self.exchange,
+            "symbol": self.symbol,
+            "timestamp": self.timestamp,
+            "local_timestamp": self.local_timestamp,
+            "id": self.id,
+            "side": self.side,
+            "price": self.price,
+            "amount": self.amount,
+        }
+
+
+@dataclass
+class ParadexTradeMessage:
+    """Paradex WebSocket 交易消息"""
+    id: str
+    market: str
+    side: str
+    size: str
+    price: str
+    created_at: int
+    trade_type: str
+
+    @classmethod
+    def from_ws_message(cls, data: dict) -> "ParadexTradeMessage":
+        """从 WebSocket 消息创建 ParadexTradeMessage"""
+        params = data.get("params", {})
+        trade_data = params.get("data", {})
+        
+        return cls(
+            id=trade_data.get("id", ""),
+            market=trade_data.get("market", ""),
+            side=trade_data.get("side", ""),
+            size=trade_data.get("size", "0"),
+            price=trade_data.get("price", "0"),
+            created_at=trade_data.get("created_at", 0),
+            trade_type=trade_data.get("trade_type", "")
+        )
+
+    def to_tardis_trade(self, local_timestamp: int) -> TardisTrade:
+        """转换为 Tardis 交易格式"""
+        # 转换时间戳从毫秒到微秒
+        timestamp_us = self.created_at * 1000
+        
+        # 转换 side: BUY -> buy, SELL -> sell
+        side = "buy" if self.side == "BUY" else "sell"
+        
+        return TardisTrade(
+            exchange="paradex",
+            symbol=self.market,
+            timestamp=timestamp_us,
+            local_timestamp=local_timestamp,
+            id=self.id,
+            side=side,
+            price=self.price,
+            amount=self.size
+        )
