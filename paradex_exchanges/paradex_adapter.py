@@ -404,6 +404,7 @@ class ParadexAdapter(ExchangeAdapter):
                 return AdapterResponse(success=True, data=symbol_position, error_msg="")
             else:
                 logger.error(f"查询持仓失败: {response.text}")
+                self.check_error(response.json())
                 return AdapterResponse(success=False, data=None, error_msg=response.text)
 
         except Exception as e:
@@ -467,6 +468,7 @@ class ParadexAdapter(ExchangeAdapter):
                 return AdapterResponse(success=True, data=order_info, error_msg="")
             else:
                 logger.error(f"查询订单失败: {response.text}", exc_info=True)
+                self.check_error(response.json())
                 return AdapterResponse(success=False, data=None, error_msg=str(response.text))
 
         except Exception as e:
@@ -502,6 +504,7 @@ class ParadexAdapter(ExchangeAdapter):
                 return AdapterResponse(success=True, data=cancel_dict, error_msg="")
             else:
                 logger.error(f"撤销订单失败: {response.text}", exc_info=True)
+                self.check_error(response.json())
                 return AdapterResponse(success=False, data=None, error_msg=str(response.text))
 
         except Exception as e:
@@ -605,6 +608,7 @@ class ParadexAdapter(ExchangeAdapter):
             else:
                 logger.warning(f"Unable to [POST] /orders Status Code:{status_code}")
                 logger.warning(f"Response: {response_json}")
+                self.check_error(response_json)
                 return AdapterResponse(
                     success=False,
                     data=None,
@@ -650,6 +654,8 @@ class ParadexAdapter(ExchangeAdapter):
                 logger.error(f"Status Code: {status_code}")
                 logger.error("Unable to GET /account")
                 logger.error(f"获取净价值失败: {response_json}")
+                
+                self.check_error(response_json)
                 return AdapterResponse(success=False, data=None, error_msg=f"{response_json}")
         except Exception as e:
             logger.error(f"获取净价值失败: {e}", exc_info=True)
@@ -658,6 +664,20 @@ class ParadexAdapter(ExchangeAdapter):
                 data=None,
                 error_msg=str(e),
             )
+    
+    def check_error(self, response_json):
+        if response_json.get("error", "unknown") == "INVALID_TOKEN":
+            self.reset_token()
+            logger.error("Token失效，重置token")
+            return True
+        return False
+    
+    def reset_token(self):
+        """
+        重置token
+        """
+        self.jwt_token = None
+        self.next_expiry_timestamp = 0
     
     def adjust_order_price(
         self, symbol: str, price: float, round_direction: str = "UP"
@@ -776,8 +796,9 @@ class ParadexAdapter(ExchangeAdapter):
             url = f"{self.base_url}/orders"
             response = requests.delete(url, proxies=self.proxies, headers=headers)
             status_code = response.status_code
-
-            return AdapterResponse(success=True, data=response.json(), error_msg="")
+            response_json = response.json()
+            self.check_error(response_json)
+            return AdapterResponse(success=True, data=response_json, error_msg="")
 
         except Exception as e:
             logger.error(f"取消所有订单失败: {e}", exc_info=True)
@@ -793,7 +814,9 @@ class ParadexAdapter(ExchangeAdapter):
             url = f"{self.base_url}/orders"
             response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code = response.status_code
-            return AdapterResponse(success=True, data=response.json()["results"], error_msg="")
+            response_json = response.json()
+            self.check_error(response_json)
+            return AdapterResponse(success=True, data=response_json["results"], error_msg="")
         except Exception as e:
             logger.error(f"查询所有未成交订单失败: {e}", exc_info=True)
             return AdapterResponse(success=False, data=None, error_msg=str(e))
@@ -818,6 +841,7 @@ class ParadexAdapter(ExchangeAdapter):
                 return AdapterResponse(success=True, data=response.json(), error_msg="")
             else:
                 logger.error(f"设置杠杠: {response.text}", exc_info=True)
+                self.check_error(response.json())
                 return AdapterResponse(success=False, data=None, error_msg=str(response.text))
 
         except Exception as e:
@@ -885,13 +909,20 @@ if __name__ == "__main__":
     # data = api.get_depth(symbol)
     # print(data)
     # print(api.get_account_info())
-    # print(api.get_net_value())
+
+    while True:
+        try:
+            print(api.get_net_value())
+            print(api.get_um_account_info())
+        except Exception as e:
+            print(e)
+        time.sleep(2)
 
     # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
     # print(data)
 
-    data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
-    print(data)
+    # data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
+    # print(data)
 
     # data = api.place_market_open_order(symbol=symbol, side="SELL", position_side="SHORT", quantity=0.003)
     # print(data)
