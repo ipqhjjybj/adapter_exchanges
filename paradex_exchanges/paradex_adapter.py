@@ -136,6 +136,7 @@ class ParadexAdapter(ExchangeAdapter):
 
         now = int(time.time())
         expiry = now + 24 * 60 * 60 * 7
+        #expiry = now + 24 * 60 * 60 
         message = build_auth_message(chain_id, now, expiry)
         sig = account.sign_message(message)
 
@@ -146,7 +147,7 @@ class ParadexAdapter(ExchangeAdapter):
             "PARADEX-SIGNATURE-EXPIRATION": str(expiry),
         }
 
-        url = paradex_http_url + '/auth'
+        url = paradex_http_url + '/auth?token_usage=interactive'
 
         logger.info(f"POST {url}")
         logger.info(f"Headers: {headers}")
@@ -575,6 +576,9 @@ class ParadexAdapter(ExchangeAdapter):
                 "Authorization": f"Bearer {self.jwt_token}",
                 "Content-Type": "application/json"
             }
+            # my_token = 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhdCtKV1QiLCJ0b2tlbl91c2FnZSI6ImludGVyYWN0aXZlIiwicHVia2V5IjoiMHgyYTc4M2JhYWI1MjFiNjM3NjQxMzc0ZTQzODgyNTIzYzI4MDU1ZDk2ZTE0MDIxZTdkOTI2MTdkMjk0MTQxZiIsImlzcyI6IlBhcmFkZXggcHJvZCIsInN1YiI6IjB4NTg0MTlkNDFiMjk4NmQ0ZjYyNjdjY2JiN2E1M2E3M2JjZGQ5NTg2ODc3MTY0ODA2NGVlYTFkMjA1ZDU2NDA4IiwiZXhwIjoxNzY1NDI5ODk5LCJuYmYiOjE3NjU0Mjk1OTksImlhdCI6MTc2NTQyOTU5OSwianRpIjoiMjEzNmQ1OTMtNDMwNi00ZDNkLTg4NTUtZGE2NDAxN2YyZGU0In0.GbOs-ybHyDZwiRSstfLd2F8tbSUSkWGUn3GEBafcbehFwXqQyHXWfSWeTnJl0BpGUGOA8uFFYHG5Erd2CwFdzg'
+            # headers["Authorization"] = f"{my_token}"
+            # headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36"
             url = self.base_url + "/orders"
 
             response = requests.post(url, headers=headers, json=order_dict, proxies=self.proxies,  timeout=60)
@@ -886,8 +890,12 @@ if __name__ == "__main__":
     # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
     # print(data)
 
-    # data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
+    data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
+    print(data)
+
+    # data = api.place_market_open_order(symbol=symbol, side="SELL", position_side="SHORT", quantity=0.003)
     # print(data)
+
 
     # data = api.query_position(symbol=symbol)
     # print(data)
@@ -910,8 +918,8 @@ if __name__ == "__main__":
     # data = api.query_all_um_open_orders(symbol)
     # print(data)
 
-    data = api.set_symbol_leverage(symbol, 20)
-    print(data)
+    # data = api.set_symbol_leverage(symbol, 20)
+    # print(data)
 
     # data = api.get_um_account_info()
     # print(data)
