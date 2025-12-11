@@ -52,8 +52,6 @@ class ParadexTradesReceiver:
         self._ws = None
         self._last_message_time = 0
         self._heartbeat_thread = None
-        self._ping_thread = None
-        self._ping_counter = 0
 
         # 回调函数
         self.on_trade: Optional[Callable[[TardisTrade], None]] = None
@@ -101,26 +99,6 @@ class ParadexTradesReceiver:
                     except Exception:
                         pass
                     break
-
-    def _ping_loop(self, ws_ref):
-        """定期发送应用层 ping 消息"""
-        while self._running:
-            time.sleep(30)  # 每30秒发送一次 ping
-            # 检查 ws 是否还是同一个连接
-            if not self._running or self._ws is not ws_ref:
-                break
-            try:
-                self._ping_counter += 1
-                ping_msg = {
-                    "jsonrpc": "2.0",
-                    "method": "ping",
-                    "id": f"ping_{self._ping_counter}"
-                }
-                ws_ref.send(json.dumps(ping_msg))
-                logger.debug(f"Sent application ping {self._ping_counter}")
-            except Exception as e:
-                logger.error(f"Failed to send ping: {e}")
-                break
 
     def start(self):
         """启动接收器 (阻塞)"""
@@ -233,10 +211,6 @@ class ParadexTradesReceiver:
                 # 启动心跳检测线程
                 self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, args=(self._ws,), daemon=True)
                 self._heartbeat_thread.start()
-                
-                # 启动 ping 线程
-                self._ping_thread = threading.Thread(target=self._ping_loop, args=(self._ws,), daemon=True)
-                self._ping_thread.start()
 
                 # 运行 WebSocket 连接，使用更保守的设置
                 self._ws.run_forever(
