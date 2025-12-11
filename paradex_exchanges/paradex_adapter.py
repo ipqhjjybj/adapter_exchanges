@@ -361,7 +361,34 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        return self.place_market_open_order(symbol, side, position_side, quantity, out_price_rate)
+        # 验证订单方向
+        error_msg = self.validate_order_direction(side, position_side, is_open=False)
+        if error_msg:
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=error_msg,
+            )
+        
+        bookticker_response = self.get_orderbook_ticker(symbol)
+        if not bookticker_response.success:
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=bookticker_response.error_msg,
+            )
+        ask_price = bookticker_response.data.ask_price
+        bid_price = bookticker_response.data.bid_price
+
+        if side == "BUY":
+            price = ask_price * (1 + out_price_rate)
+        else:
+            price = bid_price * (1 - out_price_rate)
+
+        quantity = self.adjust_order_qty(symbol, quantity)
+        price = self.adjust_order_price(symbol, price)
+        
+        return self.place_limit_order(symbol, side, position_side, quantity, price)
     
     
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
