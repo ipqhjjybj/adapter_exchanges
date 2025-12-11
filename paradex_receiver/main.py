@@ -15,6 +15,7 @@ from paradex_receiver import ParadexDepthReceiver, TardisL2Snapshot
 
 sys.path.append("/home/ec2-user/test_lighter_dex/adapter_exchanges/lighter_receiver")
 sys.path.append("/Users/shenzhuoheng/quant_yz/git/adapter_exchanges/paradex_receiver")
+sys.path.append("/home/hkhm/git/adapter_exchanges/paradex_receiver")
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
