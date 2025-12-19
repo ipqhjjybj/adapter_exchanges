@@ -671,7 +671,7 @@ class ParadexAdapter(ExchangeAdapter):
         """
         # self.judge_auth_token_expired()
         try:
-            for i in range(2):
+            for i in range(3):
                 self.judge_auth_token_expired()
                 if side == "BUY":
                     order_side = OrderSide.Buy
@@ -716,7 +716,7 @@ class ParadexAdapter(ExchangeAdapter):
                         api_resp=response_json,
                     )
 
-                    if i == 1:
+                    if i == 2:
                         result =  AdapterResponse(
                             success=True, data=order_placement_result, error_msg=""
                         )
@@ -736,7 +736,7 @@ class ParadexAdapter(ExchangeAdapter):
                         data=None,
                         error_msg=f"Response: {response_json}",
                     )
-                    if i == 1:
+                    if i == 2:
                         return result
                     else:
                         continue
