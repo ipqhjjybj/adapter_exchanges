@@ -1041,6 +1041,16 @@ if __name__ == "__main__":
     api = ParadexAdapter(paradex_account_address, paradex_account_private_key, paradex_account_public_key)
     
     symbol = "PAXG-USD-PERP"
+    t1=time.time()
+    for i in range(1000):
+        try:
+            print(api.get_net_value())
+            api.reset_token() 
+
+            t2 = time.time()
+            print("use time:", (t2 - t1) / (i+1))
+        except Exception as e:
+            print(e)
     #data = api.get_orderbook_ticker(symbol)
     # data = api.get_depth(symbol)
     # print(data)
@@ -1056,8 +1066,8 @@ if __name__ == "__main__":
     #         print(e)
     #     time.sleep(2)
 
-    data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
-    print(data)
+    # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
+    # print(data)
 
     # data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
     # print(data)
