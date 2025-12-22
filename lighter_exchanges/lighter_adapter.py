@@ -126,6 +126,22 @@ class LightAdapter(ExchangeAdapter):
         else:
             return None
     
+    def get_account_info2(self):
+        """
+        获得账户信息
+        """
+        url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
+        data = requests.get(url, headers=self.headers, timeout=60)
+        if data.status_code == 200:
+            js_data = data.json()
+            if js_data["code"] == 200:
+                #self.account_index = js_data["accounts"][0]["index"]
+                logger.info(f"get_account_info success, account_index: {self.account_index}")
+            else:
+                raise Exception("get_account_info error")
+        else:
+            return None
+    
     def get_client_order_id(self):
         """获得client_order_id"""
         return int(time.time() * 1000)
@@ -411,8 +427,8 @@ class LightAdapter(ExchangeAdapter):
                     logger.error(f"查询订单失败: {e}", exc_info=True)
                     return AdapterResponse(success=False, data=None, error_msg=str(e))
             else:
-                logger.error(f"查询订单失败: {e}", exc_info=True)
-                return AdapterResponse(success=False, data=None, error_msg=str(e))
+                logger.error(f"查询订单失败: {data}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(data))
             
             # 2.再检查 完成的订单里面是否有这个订单
             url_inactivate_orders = f"{self.base_url}/api/v1/accountInactiveOrders?auth={self.auth_token}&account_index={self.account_index}&market_id={market_id}&limit=100"
@@ -449,8 +465,8 @@ class LightAdapter(ExchangeAdapter):
                             )
                             return AdapterResponse(success=True, data=order_info, error_msg="")
             else:
-                logger.error(f"查询订单失败: {e}", exc_info=True)
-                return AdapterResponse(success=False, data=None, error_msg=str(e))
+                logger.error(f"查询订单失败: {data}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(data))
             
             msg = f"Not found this order:{order_id}"
             logger.error(f"查询订单失败: {msg}", exc_info=True)
@@ -865,9 +881,12 @@ if __name__ == "__main__":
         api_key_index=3
     )
 
-    lighter_adapter.judge_auth_token_expired()
-    print(lighter_adapter.auth_token)
+    data = lighter_adapter.get_account_info2()
     pass
+
+    # lighter_adapter.judge_auth_token_expired()
+    # print(lighter_adapter.auth_token)
+    # pass
 
     # while True:
     #     print(lighter_adapter.get_orderbook_ticker("PAXGUSDT"))
@@ -876,7 +895,7 @@ if __name__ == "__main__":
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "BUY", "LONG", 0.1))
     #print(lighter_adapter.place_market_open_order("ETHUSDT", "SELL", "SHORT", 0.1))
     #print(lighter_adapter.get_account_info()
-    #print(lighter_adapter.query_position("ETHUSDT"))
+    # print(lighter_adapter.query_position("ETHUSDT"))
 
     #print(lighter_adapter.query_order("ETHUSDT", "1764148056"))
     #print(lighter_adapter.query_order("ETHUSDT", "1764212198891"))
