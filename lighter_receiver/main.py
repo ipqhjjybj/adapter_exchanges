@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 MARKET_SYMBOL_MAP = {
     0: "ETHUSDT",
     48: "PAXGUSDT",
+    96: "EURUSD",
     # 1: "BTCUSDT",
     # 2: "SOLUSDT",
 }
