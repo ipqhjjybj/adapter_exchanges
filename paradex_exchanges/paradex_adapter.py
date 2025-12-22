@@ -70,13 +70,22 @@ class ParadexAdapter(ExchangeAdapter):
     该类实现了与Lighter交易所的交互功能，包括订单管理、持仓查询、账户信息获取等
     """
     
-    def __init__(self, paradex_account_address, paradex_account_private_key):
+    def __init__(self, paradex_account_address, paradex_account_private_key, paradex_account_public_key="", proxy_url=None):
         # 初始化基础URL
         self.base_url = "https://api.prod.paradex.trade/v1"
         self.headers = {"accept": "application/json"}
+
+        if proxy_url is not None:
+            self.proxies = {
+                "http": proxy_url,
+                "https": proxy_url
+            }
+        else:
+            self.proxies = None
         
         self.paradex_account_address = paradex_account_address
         self.paradex_account_private_key = paradex_account_private_key
+        self.paradex_account_public_key = paradex_account_public_key
 
         # 创建token
         self.next_expiry_timestamp = 0
@@ -105,7 +114,7 @@ class ParadexAdapter(ExchangeAdapter):
         
         headers = dict()
         
-        response = requests.get(self.base_url  + path, headers=headers, timeout=60)
+        response = requests.get(self.base_url + path, headers=headers, proxies=self.proxies, timeout=60)
         status_code: int = response.status_code
         response_json: Dict = response.json()
         
@@ -128,6 +137,7 @@ class ParadexAdapter(ExchangeAdapter):
 
         now = int(time.time())
         expiry = now + 24 * 60 * 60 * 7
+        #expiry = now + 24 * 60 * 60 
         message = build_auth_message(chain_id, now, expiry)
         sig = account.sign_message(message)
 
@@ -137,13 +147,15 @@ class ParadexAdapter(ExchangeAdapter):
             "PARADEX-TIMESTAMP": str(now),
             "PARADEX-SIGNATURE-EXPIRATION": str(expiry),
         }
-
-        url = paradex_http_url + '/auth'
+        if len(self.paradex_account_public_key) > 0:
+            url =  paradex_http_url + f'/auth/{self.paradex_account_public_key}?token_usage=interactive'
+        else:
+            url = paradex_http_url + '/auth?token_usage=interactive'
 
         logger.info(f"POST {url}")
         logger.info(f"Headers: {headers}")
 
-        response = requests.post(url, headers=headers, timeout=60)
+        response = requests.post(url, headers=headers, proxies=self.proxies, timeout=60)
         status_code: int = response.status_code
         response_json: Dict = response.json()
         
@@ -169,8 +181,8 @@ class ParadexAdapter(ExchangeAdapter):
                 jwt_token, expiry = self.get_jwt_token(
                     self.paradex_config,
                     self.base_url,
-                    paradex_account_address,
-                    paradex_account_private_key,
+                    self.paradex_account_address,
+                    self.paradex_account_private_key,
                 )
                 logger.info(f"JWT Token: {jwt_token} next_expiry_timestamp:{expiry}")
                 self.next_expiry_timestamp = expiry
@@ -182,7 +194,7 @@ class ParadexAdapter(ExchangeAdapter):
     
     def get_exchange_info(self):
         url = f"{self.base_url}/markets"
-        data = requests.get(url, headers=self.headers, timeout=60)
+        data = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             results = js_data["results"]
@@ -223,7 +235,7 @@ class ParadexAdapter(ExchangeAdapter):
             AdapterResponse: 包含错误信息的响应
         """
         url = f"{self.base_url}/orderbook/{symbol}"
-        data = requests.get(url, headers=self.headers, timeout=60)
+        data = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             
@@ -265,7 +277,7 @@ class ParadexAdapter(ExchangeAdapter):
             AdapterResponse: 包含错误信息的响应
         """
         url = f"{self.base_url}/orderbook/{symbol}?depth={limit}"
-        data = requests.get(url, headers=self.headers, timeout=60)
+        data = requests.get(url, headers=self.headers, proxies=self.proxies, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             
@@ -352,7 +364,34 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        return self.place_market_open_order(symbol, side, position_side, quantity, out_price_rate)
+        # 验证订单方向
+        error_msg = self.validate_order_direction(side, position_side, is_open=False)
+        if error_msg:
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=error_msg,
+            )
+        
+        bookticker_response = self.get_orderbook_ticker(symbol)
+        if not bookticker_response.success:
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=bookticker_response.error_msg,
+            )
+        ask_price = bookticker_response.data.ask_price
+        bid_price = bookticker_response.data.bid_price
+
+        if side == "BUY":
+            price = ask_price * (1 + out_price_rate)
+        else:
+            price = bid_price * (1 - out_price_rate)
+
+        quantity = self.adjust_order_qty(symbol, quantity)
+        price = self.adjust_order_price(symbol, price)
+        
+        return self.place_limit_order(symbol, side, position_side, quantity, price)
     
     
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
@@ -371,7 +410,7 @@ class ParadexAdapter(ExchangeAdapter):
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/positions"
 
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code = response.status_code
             
             if status_code == 200:
@@ -395,6 +434,7 @@ class ParadexAdapter(ExchangeAdapter):
                 return AdapterResponse(success=True, data=symbol_position, error_msg="")
             else:
                 logger.error(f"查询持仓失败: {response.text}")
+                self.check_error(response.json())
                 return AdapterResponse(success=False, data=None, error_msg=response.text)
 
         except Exception as e:
@@ -418,7 +458,7 @@ class ParadexAdapter(ExchangeAdapter):
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/orders/{order_id}"
 
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, proxies=self.proxies, headers=headers)
             status_code = response.status_code
             
             if status_code == 200:
@@ -458,6 +498,7 @@ class ParadexAdapter(ExchangeAdapter):
                 return AdapterResponse(success=True, data=order_info, error_msg="")
             else:
                 logger.error(f"查询订单失败: {response.text}", exc_info=True)
+                self.check_error(response.json())
                 return AdapterResponse(success=False, data=None, error_msg=str(response.text))
 
         except Exception as e:
@@ -482,7 +523,7 @@ class ParadexAdapter(ExchangeAdapter):
         try:
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/orders/{order_id}"
-            response = requests.delete(url, headers=headers)
+            response = requests.delete(url, proxies=self.proxies, headers=headers)
             status_code = response.status_code
             
             if status_code == 204:
@@ -493,6 +534,7 @@ class ParadexAdapter(ExchangeAdapter):
                 return AdapterResponse(success=True, data=cancel_dict, error_msg="")
             else:
                 logger.error(f"撤销订单失败: {response.text}", exc_info=True)
+                self.check_error(response.json())
                 return AdapterResponse(success=False, data=None, error_msg=str(response.text))
 
         except Exception as e:
@@ -526,6 +568,91 @@ class ParadexAdapter(ExchangeAdapter):
         )
         return order
 
+    # def place_limit_order(
+    #     self, symbol: str, side: str, position_side: str, quantity: float, price: float
+    # ) -> AdapterResponse[OrderPlacementResult]:
+    #     """
+    #     下限价单
+
+    #     Args:
+    #         symbol: 交易对
+    #         side: 方向("BUY"或"SELL")
+    #         position_side: 持仓方向("LONG"或"SHORT")
+    #         quantity: 数量
+    #         price: 价格
+
+    #     Returns:
+    #         AdapterResponse: 包含订单信息的响应
+    #     """
+    #     self.judge_auth_token_expired()
+    #     try:
+    #         if side == "BUY":
+    #             order_side = OrderSide.Buy
+    #         else:
+    #             order_side = OrderSide.Sell
+            
+    #         size = Decimal(str(quantity))
+    #         price = Decimal(str(price))
+    #         client_id = self.get_client_order_id()
+
+    #         # Build the order
+    #         order = self.build_limit_order_sync(symbol, order_side, size, price, client_id)
+    #         # Sign the order
+    #         signature = self.sign_order_sync(self.paradex_config, self.paradex_account_address, self.paradex_account_private_key, order)
+    #         order.signature = signature
+
+    #         # Convert order to dict
+    #         order_dict = order.dump_to_dict()
+            
+    #         # Prepare headers
+    #         headers = {
+    #             "Authorization": f"Bearer {self.jwt_token}",
+    #             "Content-Type": "application/json"
+    #         }
+    #         # my_token = 'Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0eXAiOiJhdCtKV1QiLCJ0b2tlbl91c2FnZSI6ImludGVyYWN0aXZlIiwicHVia2V5IjoiMHgyYTc4M2JhYWI1MjFiNjM3NjQxMzc0ZTQzODgyNTIzYzI4MDU1ZDk2ZTE0MDIxZTdkOTI2MTdkMjk0MTQxZiIsImlzcyI6IlBhcmFkZXggcHJvZCIsInN1YiI6IjB4NTg0MTlkNDFiMjk4NmQ0ZjYyNjdjY2JiN2E1M2E3M2JjZGQ5NTg2ODc3MTY0ODA2NGVlYTFkMjA1ZDU2NDA4IiwiZXhwIjoxNzY1NDI5ODk5LCJuYmYiOjE3NjU0Mjk1OTksImlhdCI6MTc2NTQyOTU5OSwianRpIjoiMjEzNmQ1OTMtNDMwNi00ZDNkLTg4NTUtZGE2NDAxN2YyZGU0In0.GbOs-ybHyDZwiRSstfLd2F8tbSUSkWGUn3GEBafcbehFwXqQyHXWfSWeTnJl0BpGUGOA8uFFYHG5Erd2CwFdzg'
+    #         # headers["Authorization"] = f"{my_token}"
+    #         # headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36"
+    #         url = self.base_url + "/orders"
+
+    #         response = requests.post(url, headers=headers, json=order_dict, proxies=self.proxies,  timeout=60)
+    #         status_code = response.status_code
+    #         response_json = response.json()
+    #         response_json["status_code"] = status_code
+            
+    #         if status_code == 201:
+    #             logger.info(f"Order Created: {status_code} | Response: {response_json}")
+
+    #             order_placement_result = OrderPlacementResult(
+    #                 symbol=symbol,
+    #                 order_id=response_json["id"],
+    #                 order_qty=quantity,
+    #                 order_price=price,
+    #                 side=side,
+    #                 position_side=position_side,
+    #                 api_resp=response_json,
+    #             )
+
+    #             return AdapterResponse(
+    #                 success=True, data=order_placement_result, error_msg=""
+    #             )
+    #         else:
+    #             logger.warning(f"Unable to [POST] /orders Status Code:{status_code}")
+    #             logger.warning(f"Response: {response_json}")
+    #             self.check_error(response_json)
+    #             return AdapterResponse(
+    #                 success=False,
+    #                 data=None,
+    #                 error_msg=f"Response: {response_json}",
+    #             )
+            
+    #     except Exception as e:
+    #         logger.error(f"下限价单失败: {e}")
+    #         return AdapterResponse(
+    #             success=False,
+    #             data=None,
+    #             error_msg=str(e),
+    #         )
+
     def place_limit_order(
         self, symbol: str, side: str, position_side: str, quantity: float, price: float
     ) -> AdapterResponse[OrderPlacementResult]:
@@ -542,62 +669,77 @@ class ParadexAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        self.judge_auth_token_expired()
+        # self.judge_auth_token_expired()
         try:
-            if side == "BUY":
-                order_side = OrderSide.Buy
-            else:
-                order_side = OrderSide.Sell
-            
-            size = Decimal(str(quantity))
-            price = Decimal(str(price))
-            client_id = self.get_client_order_id()
+            for i in range(3):
+                self.judge_auth_token_expired()
+                if side == "BUY":
+                    order_side = OrderSide.Buy
+                else:
+                    order_side = OrderSide.Sell
+                
+                size = Decimal(str(quantity))
+                price = Decimal(str(price))
+                client_id = self.get_client_order_id()
 
-            # Build the order
-            order = self.build_limit_order_sync(symbol, order_side, size, price, client_id)
-            # Sign the order
-            signature = self.sign_order_sync(self.paradex_config, self.paradex_account_address, self.paradex_account_private_key, order)
-            order.signature = signature
+                # Build the order
+                order = self.build_limit_order_sync(symbol, order_side, size, price, client_id)
+                # Sign the order
+                signature = self.sign_order_sync(self.paradex_config, self.paradex_account_address, self.paradex_account_private_key, order)
+                order.signature = signature
 
-            # Convert order to dict
-            order_dict = order.dump_to_dict()
-            
-            # Prepare headers
-            headers = {
-                "Authorization": f"Bearer {self.jwt_token}",
-                "Content-Type": "application/json"
-            }
-            url = self.base_url + "/orders"
+                # Convert order to dict
+                order_dict = order.dump_to_dict()
+                
+                # Prepare headers
+                headers = {
+                    "Authorization": f"Bearer {self.jwt_token}",
+                    "Content-Type": "application/json"
+                }
+                url = self.base_url + "/orders"
 
-            response = requests.post(url, headers=headers, json=order_dict, timeout=60)
-            status_code = response.status_code
-            response_json = response.json()
-            response_json["status_code"] = status_code
-            
-            if status_code == 201:
-                logger.info(f"Order Created: {status_code} | Response: {response_json}")
+                response = requests.post(url, headers=headers, json=order_dict, proxies=self.proxies,  timeout=60)
+                status_code = response.status_code
+                response_json = response.json()
+                response_json["status_code"] = status_code
+                
+                if status_code == 201:
+                    logger.info(f"Order Created: {status_code} | Response: {response_json}")
 
-                order_placement_result = OrderPlacementResult(
-                    symbol=symbol,
-                    order_id=response_json["id"],
-                    order_qty=quantity,
-                    order_price=price,
-                    side=side,
-                    position_side=position_side,
-                    api_resp=response_json,
-                )
+                    order_placement_result = OrderPlacementResult(
+                        symbol=symbol,
+                        order_id=response_json["id"],
+                        order_qty=quantity,
+                        order_price=price,
+                        side=side,
+                        position_side=position_side,
+                        api_resp=response_json,
+                    )
 
-                return AdapterResponse(
-                    success=True, data=order_placement_result, error_msg=""
-                )
-            else:
-                logger.warning(f"Unable to [POST] /orders Status Code:{status_code}")
-                logger.warning(f"Response: {response_json}")
-                return AdapterResponse(
-                    success=False,
-                    data=None,
-                    error_msg=f"Response: {response_json}",
-                )
+                    if i == 2:
+                        result =  AdapterResponse(
+                            success=True, data=order_placement_result, error_msg=""
+                        )
+                        return result
+                    else:
+                        result =  AdapterResponse(
+                            success=True, data=order_placement_result, error_msg=""
+                        )
+                        print(result)
+                        time.sleep(60 * 6)
+                else:
+                    logger.warning(f"Unable to [POST] /orders Status Code:{status_code}")
+                    logger.warning(f"Response: {response_json}")
+                    self.check_error(response_json)
+                    result = AdapterResponse(
+                        success=False,
+                        data=None,
+                        error_msg=f"Response: {response_json}",
+                    )
+                    if i == 2:
+                        return result
+                    else:
+                        continue
             
         except Exception as e:
             logger.error(f"下限价单失败: {e}")
@@ -624,7 +766,7 @@ class ParadexAdapter(ExchangeAdapter):
             logger.info(f"GET {url}")
             logger.info(f"Headers: {headers}")
 
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code: int = response.status_code
             response_json: Dict = response.json()
             
@@ -638,6 +780,8 @@ class ParadexAdapter(ExchangeAdapter):
                 logger.error(f"Status Code: {status_code}")
                 logger.error("Unable to GET /account")
                 logger.error(f"获取净价值失败: {response_json}")
+                
+                self.check_error(response_json)
                 return AdapterResponse(success=False, data=None, error_msg=f"{response_json}")
         except Exception as e:
             logger.error(f"获取净价值失败: {e}", exc_info=True)
@@ -646,6 +790,20 @@ class ParadexAdapter(ExchangeAdapter):
                 data=None,
                 error_msg=str(e),
             )
+    
+    def check_error(self, response_json):
+        if response_json.get("error", "unknown") == "INVALID_TOKEN":
+            self.reset_token()
+            logger.error("Token失效，重置token")
+            return True
+        return False
+    
+    def reset_token(self):
+        """
+        重置token
+        """
+        self.jwt_token = None
+        self.next_expiry_timestamp = 0
     
     def adjust_order_price(
         self, symbol: str, price: float, round_direction: str = "UP"
@@ -719,7 +877,7 @@ class ParadexAdapter(ExchangeAdapter):
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/positions"
 
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code = response.status_code
             
             position_value = 0
@@ -762,10 +920,11 @@ class ParadexAdapter(ExchangeAdapter):
         try:
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/orders"
-            response = requests.delete(url, headers=headers)
+            response = requests.delete(url, proxies=self.proxies, headers=headers)
             status_code = response.status_code
-
-            return AdapterResponse(success=True, data=response.json(), error_msg="")
+            response_json = response.json()
+            self.check_error(response_json)
+            return AdapterResponse(success=True, data=response_json, error_msg="")
 
         except Exception as e:
             logger.error(f"取消所有订单失败: {e}", exc_info=True)
@@ -779,9 +938,11 @@ class ParadexAdapter(ExchangeAdapter):
         try:
             headers = {"Authorization": f"Bearer {self.jwt_token}"}
             url = f"{self.base_url}/orders"
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code = response.status_code
-            return AdapterResponse(success=True, data=response.json()["results"], error_msg="")
+            response_json = response.json()
+            self.check_error(response_json)
+            return AdapterResponse(success=True, data=response_json["results"], error_msg="")
         except Exception as e:
             logger.error(f"查询所有未成交订单失败: {e}", exc_info=True)
             return AdapterResponse(success=False, data=None, error_msg=str(e))
@@ -790,7 +951,28 @@ class ParadexAdapter(ExchangeAdapter):
         """
         设置合约杠杆
         """
-        raise NotImplementedError("Paradex交易所不支持设置合约杠杆-先不实现")
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}", "Content-Type": "application/json"}
+            url = f"{self.base_url}/account/margin/{symbol}"
+
+            data = {
+                "margin_type": "CROSS",
+                "leverage": leverage,
+            }
+            response = requests.post(url, proxies=self.proxies, json=data, headers=headers)
+            status_code = response.status_code
+            
+            if status_code == 200:
+                return AdapterResponse(success=True, data=response.json(), error_msg="")
+            else:
+                logger.error(f"设置杠杠: {response.text}", exc_info=True)
+                self.check_error(response.json())
+                return AdapterResponse(success=False, data=None, error_msg=str(response.text))
+
+        except Exception as e:
+            logger.error(f"设置杠杠失败: {e}", exc_info=True)
+            return AdapterResponse(success=False, data=None, error_msg=str(e))
     
     def get_um_account_info(self) -> AdapterResponse[UmAccountInfo]:
         """
@@ -805,7 +987,7 @@ class ParadexAdapter(ExchangeAdapter):
             logger.info(f"GET {url}")
             logger.info(f"Headers: {headers}")
 
-            response = requests.get(url, headers=headers, timeout=60)
+            response = requests.get(url, headers=headers, proxies=self.proxies, timeout=60)
             status_code: int = response.status_code
             response_json: Dict = response.json()
             
@@ -837,6 +1019,12 @@ class ParadexAdapter(ExchangeAdapter):
                 data=None,
                 error_msg=str(e),
             )
+    
+    # ==================
+    # test
+    # ==================
+    # def get_subkeys(self):
+
 
 
 if __name__ == "__main__":
@@ -845,21 +1033,39 @@ if __name__ == "__main__":
 
 
     paradex_account_address = "0x58419d41b2986d4f6267ccbb7a53a73bcdd95868771648064eea1d205d56408"
-    paradex_account_private_key = "0x7fcc70496c609c985e7033692896f838f161e1f4205990d9ad51e1c114fbf70"
-    api = ParadexAdapter(paradex_account_address, paradex_account_private_key)
+    #paradex_account_private_key = "0x7fcc70496c609c985e7033692896f838f161e1f4205990d9ad51e1c114fbf70"
+    # sub_key
+    paradex_account_private_key = "0x0044ae9b363847e54509e3b3f6ba53b946b78a8ddcc27874feabfc7a0a450bd7"
+    paradex_account_public_key = "0x7e17ec180717664faeff3f3e907a29f027727ea24e662881442dd5c66c9ed8f"
+
+    api = ParadexAdapter(paradex_account_address, paradex_account_private_key, paradex_account_public_key)
     
     symbol = "PAXG-USD-PERP"
     #data = api.get_orderbook_ticker(symbol)
     # data = api.get_depth(symbol)
     # print(data)
-    #print(api.get_account_info())
-    print(api.get_net_value())
+    # print(api.get_account_info())
 
-    # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
-    # print(data)
+    # api.
+
+    # while True:
+    #     try:
+    #         print(api.get_net_value())
+    #         print(api.get_um_account_info())
+    #     except Exception as e:
+    #         print(e)
+    #     time.sleep(2)
+
+    data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
+    print(data)
 
     # data = api.place_market_open_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.003)
     # print(data)
+
+    # data = api.place_market_open_order(symbol=symbol, side="SELL", position_side="SHORT", quantity=0.003)
+    # print(data)
+
+    
 
     # data = api.query_position(symbol=symbol)
     # print(data)
@@ -882,8 +1088,12 @@ if __name__ == "__main__":
     # data = api.query_all_um_open_orders(symbol)
     # print(data)
 
-    data = api.get_um_account_info()
-    print(data)
+    # data = api.set_symbol_leverage(symbol, 20)
+    # print(data)
+
+    # data = api.get_um_account_info()
+    # print(data)
+
     pass
     
 
