@@ -2,10 +2,7 @@
 import requests
 import asyncio
 import sys
-
-# 修复 Windows 上 aiodns 需要 SelectorEventLoop 的问题
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+import time
 
 import logging
 from decimal import Decimal
@@ -14,17 +11,10 @@ import os
 import time
 from collections import defaultdict
 
-import sys
-sys.path.append(r".")
-
-try:
-    import lighter
-except ImportError as e:
-    logging.warning("未检测到lighter包，请确保已正确安装lighter模块。")
-    # raise ImportError(
-    #     "无法导入lighter包，请确保已正确安装lighter模块。"
-    # ) from e
-
+sys.path.append("/Users/shenzhuoheng/quant_yz/git/adapter_exchanges")
+sys.path.append("/home/ec2-user/test_lighter_dex/adapter_exchanges")
+import lighter
+#import lighter_my as lighter
 from src.data_types import (
     BookTicker,
     Depth,
@@ -46,36 +36,25 @@ class LightAdapter(ExchangeAdapter):
     lighter交易所适配器实现
     """
     
-    def __init__(self, l1_address: str, apikey_private_key: str, api_key_index: int, proxy: str = None):
+    def __init__(self, l1_address: str, apikey_private_key: str, api_key_index: int):
         self.base_url = "https://mainnet.zklighter.elliot.ai"
 
         self.l1_address = l1_address
         self.apikey_private_key = apikey_private_key
         self.api_key_index = api_key_index
         self.headers = {"accept": "application/json"}
-        self.account_index = 1
-        self.exchange_name = "lighter"
-        if proxy == "local":
-            self.proxy = None
-        else:
-            self.proxy = proxy
+        self.account_index = -1
+
+        # 获得账户信息
+        self.get_account_info()
+        assert self.account_index >= 0, "get_account_info error"
+
         # 创建token
         self.next_expiry_timestamp = 0
         self.auth_token = None
 
         # 更新交易所信息
-        max_try_times = 5
-        for i in range(max_try_times):
-            try:
-                market_index_dic, price_decimal_dic, size_decimal_dic, min_base_amount_dic = self.get_exchange_info()
-                break
-            except Exception as e:
-                logger.error(f"get_exchange_info error: {e}")
-                time.sleep(1)
-                continue
-        if i == max_try_times - 1:
-            exit(1)
-            raise Exception("get_exchange_info error")
+        market_index_dic, price_decimal_dic, size_decimal_dic, min_base_amount_dic = self.get_exchange_info()
         self.market_index_dic = market_index_dic
         self.price_decimal_dic = price_decimal_dic
         self.size_decimal_dic = size_decimal_dic
@@ -84,253 +63,7 @@ class LightAdapter(ExchangeAdapter):
         assert len(market_index_dic) > 0, "get_exchange_info error"
         assert len(price_decimal_dic) > 0, "get_exchange_info error"
         assert len(size_decimal_dic) > 0, "get_exchange_info error"
-        
-        # 获得账户信息
-        # self.get_account_info()
-        # assert self.account_index >= 0, "get_account_info error"
-        self.account_index = self.get_account_index()
-        assert self.account_index >= 0, "get_account_index error"
-        logger.info(f"get_account_index success, account_index: {self.account_index}")
-
-        # 跟踪已设置 margin mode 的 symbol，避免重复设置
-        self._margin_mode_set = set()
-        # 默认使用全仓模式
-        self.default_margin_mode = lighter.SignerClient.CROSS_MARGIN_MODE  # 0: 全仓, 1: 逐仓
-        self.default_leverage = 10  # 默认杠杆倍数
     
-    @retry_wrapper(retries=5, sleep_seconds=1, is_adapter_method=False)
-    def get_all_accounts(self):
-        """获得所有的地址"""
-        url = f"{self.base_url}/api/v1/account?by=l1_address&value={self.l1_address}"
-        data = requests.get(url, headers=self.headers, timeout=60)
-        if data.status_code == 200:
-            js_data = data.json()
-            if js_data["code"] == 200:
-                return js_data["accounts"]
-        else:
-            raise Exception("get_all_accounts error")
-    
-    def get_account_index(self):
-        """获得账户索引
-        1. get 所有的 address;
-        2. 针对当前的api 组建 client;
-        3. 尝试下单;
-        4. 下单成功;
-        5. 查询订单;
-        6. 双重保险, 如果都成功说明, 对应账户索引成功;
-        """
-        test_symbol = "SOLUSDT"
-        test_side = "BUY"
-        test_position_side = "LONG"
-        test_quantity = 0.1
-        test_price = 100
-        
-        all_accounts = self.get_all_accounts()
-        if len(all_accounts) == 0:
-            raise Exception("get_all_accounts error")
-        for account in all_accounts:
-            account_index = int(account["index"])
-            res_data = self.place_test_order(test_symbol, test_side, test_position_side, test_quantity, test_price, account_index)
-            if res_data.success:
-                return account_index
-            else:
-                continue
-        raise Exception("get_account_index failed")
-
-    def set_margin_mode(
-        self, symbol: str, margin_mode: int = None, leverage: int = None
-    ) -> AdapterResponse[bool]:
-        """
-        设置保证金模式和杠杆
-
-        Args:
-            symbol: 交易对
-            margin_mode: 保证金模式 (0: 全仓 CROSS_MARGIN_MODE, 1: 逐仓 ISOLATED_MARGIN_MODE)
-            leverage: 杠杆倍数
-
-        Returns:
-            AdapterResponse: 包含设置结果的响应
-        """
-        if margin_mode is None:
-            margin_mode = self.default_margin_mode
-        if leverage is None:
-            leverage = self.default_leverage
-
-        # 如果该 symbol 已经设置过，跳过
-        cache_key = f"{symbol}_{margin_mode}_{leverage}"
-        if cache_key in self._margin_mode_set:
-            logger.debug(f"margin mode already set for {symbol}, skipping")
-            return AdapterResponse(success=True, data=True, error_msg="")
-
-        try:
-            market_id = self.market_index_dic[symbol]
-
-            async def _set_margin_mode_with_new_client():
-                new_client = lighter.SignerClient(
-                    url=self.base_url,
-                    api_private_keys={self.api_key_index: self.apikey_private_key},
-                    account_index=self.account_index,
-                )
-                try:
-                    result = await new_client.update_leverage(
-                        market_index=market_id,
-                        margin_mode=margin_mode,
-                        leverage=leverage,
-                    )
-                    return result
-                finally:
-                    await new_client.close()
-
-            x, tx_hash, err = asyncio.run(_set_margin_mode_with_new_client())
-
-            if err is not None:
-                logger.error(f"设置 margin mode 失败: {err}")
-                return AdapterResponse(success=False, data=None, error_msg=str(err))
-
-            # 设置成功，记录到缓存
-            self._margin_mode_set.add(cache_key)
-            logger.info(f"设置 margin mode 成功: symbol={symbol}, margin_mode={margin_mode}, leverage={leverage}")
-            return AdapterResponse(success=True, data=True, error_msg="")
-
-        except Exception as e:
-            logger.error(f"设置 margin mode 失败: {e}")
-            return AdapterResponse(success=False, data=None, error_msg=str(e))
-
-    def place_test_order(
-        self, symbol: str, side: str, position_side: str, quantity: float, price: float, account_index: int
-    ) -> AdapterResponse[OrderPlacementResult]:
-        """
-        下限价单
-
-        Args:
-            symbol: 交易对
-            side: 方向("BUY"或"SELL")
-            position_side: 持仓方向("LONG"或"SHORT")
-            quantity: 数量
-            price: 价格
-
-        Returns:
-            AdapterResponse: 包含订单信息的响应
-        """
-        def is_retryable_error(err):
-            try:
-                # 针对"Too Many Requests"以及"couldn't get nonce"重试一次
-                if err is None:
-                    return False
-                err_str = str(err)
-                if (
-                    "Too Many Requests" in err_str
-                    or "couldn't get nonce" in err_str
-                ):
-                    return True
-            except Exception:
-                pass
-            return False
-
-        try:
-            market_id = self.market_index_dic[symbol]
-            price_decimal = self.price_decimal_dic[symbol]
-            size_decimal = self.size_decimal_dic[symbol]
-
-            if round(quantity, size_decimal) != quantity:
-                return AdapterResponse(
-                    success=False,
-                    data=None,
-                    error_msg=f"quantity must be {size_decimal} decimal places",
-                )
-            
-            if round(price, price_decimal) != price:
-                return AdapterResponse(
-                    success=False,
-                    data=None,
-                    error_msg=f"price must be {price_decimal} decimal places",
-                )
-            
-            send_price = int(price * (10 ** price_decimal))
-            send_quantity = int(quantity * (10 ** size_decimal))
-
-            if side == "BUY":
-                is_ask = False
-            else:
-                is_ask = True
-            
-            position_side = "open"
-            client_order_index = self.get_client_order_id()
-
-            # 在新的事件循环中重新创建客户端并执行操作
-            async def _create_limit_order_with_new_client():
-                new_client = lighter.SignerClient(
-                    url=self.base_url,
-                    api_private_keys={self.api_key_index: self.apikey_private_key},
-                    account_index=account_index,
-                    # proxy=self.proxy,
-                )
-                try:
-                    # 执行订单创建
-                    result = await new_client.create_order(
-                        market_index=market_id,
-                        client_order_index=client_order_index,
-                        base_amount=send_quantity,
-                        price=send_price,
-                        is_ask=is_ask,
-                        order_type=lighter.SignerClient.ORDER_TYPE_LIMIT,
-                        time_in_force=lighter.SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
-                        order_expiry=lighter.SignerClient.DEFAULT_IOC_EXPIRY,
-                    )
-                    return result
-                finally:
-                    # 确保关闭客户端
-                    await new_client.close()
-            
-            # 执行下单，遇到特定错误（too many requests/nonce）仅重试一次
-            for attempt in range(2):
-                x = tx_hash = err = None
-                try:
-                    x, tx_hash, err = asyncio.run(_create_limit_order_with_new_client())
-                except Exception as exc:
-                    logger.error(f"异步创建限价单失败: {exc}")
-                    err = exc
-
-                if err is not None:
-                    logger.error(f"下市价开仓单失败: {err}")
-                    # 如果是重试后还出错，则直接返回，不再反复重试
-                    if attempt == 0 and is_retryable_error(err):
-                        logger.info("检测到限频/nonce失败, 重试一次下单...")
-                        continue
-                    else:
-                        return AdapterResponse(
-                            success=False,
-                            data=None,
-                            error_msg=str(err),
-                        )
-                else:
-                    # 下单成功
-                    order_placement_result = OrderPlacementResult(
-                        symbol=symbol,
-                        order_id=client_order_index,
-                        order_qty=quantity,
-                        order_price=price,
-                        side=side,
-                        position_side=position_side,
-                        api_resp={"tx_hash": tx_hash, "result": x},
-                    )
-                    return AdapterResponse(
-                        success=True, data=order_placement_result, error_msg=""
-                    )
-            # 进入不到这里，保险起见给兜底
-            return AdapterResponse(
-                success=False,
-                data=None,
-                error_msg="Unknown error in place_limit_order",
-            )
-        except Exception as e:
-            logger.error(f"下限价单失败: {e}")
-            return AdapterResponse(
-                success=False,
-                data=None,
-                error_msg=str(e),
-            )
-            
     def judge_auth_token_expired(self):
         """判断当前token是否过期，过期则重新创建"""
         t1 = time.time()
@@ -347,12 +80,11 @@ class LightAdapter(ExchangeAdapter):
                 #     account_index=self.account_index,
                 #     api_key_index=self.api_key_index,
                 # )
+                private_keys = {int(self.api_key_index): self.apikey_private_key}
                 new_client = lighter.SignerClient(
                     url=self.base_url,
-                    api_private_keys={self.api_key_index: self.apikey_private_key},
                     account_index=self.account_index,
-                    # proxy=self.proxy,
-                    # api_key_index=self.api_key_index,
+                    api_private_keys=private_keys,
                 )
                 t2 = time.time()
                 print(t2 - t1)
@@ -379,39 +111,46 @@ class LightAdapter(ExchangeAdapter):
             logger.info(f"new token created:{self.auth_token}")
 
     def get_account_info(self):
-        pass
-    #     """
-    #     获得账户信息
-    #     """
-    #     url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
-    #     data = requests.get(url, headers=self.headers, timeout=60)
-    #     if data.status_code == 200:
-    #         js_data = data.json()
-    #         if js_data["code"] == 200:
-    #             self.account_index = js_data["accounts"][0]["index"]
-    #             logger.info(f"get_account_info success, account_index: {self.account_index}")
-    #         else:
-    #             raise Exception("get_account_info error")
-    #     else:
-    #         return None
+        """
+        获得账户信息
+        """
+        url = f"{self.base_url}/api/v1/account?by=l1_address&value={self.l1_address}"
+        data = requests.get(url, headers=self.headers, timeout=60)
+        if data.status_code == 200:
+            js_data = data.json()
+            if js_data["code"] == 200:
+                self.account_index = js_data["accounts"][0]["index"]
+                logger.info(f"get_account_info success, account_index: {self.account_index}")
+            else:
+                raise Exception("get_account_info error")
+        else:
+            return None
+    
+    def get_account_info2(self):
+        """
+        获得账户信息
+        """
+        url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
+        data = requests.get(url, headers=self.headers, timeout=60)
+        if data.status_code == 200:
+            js_data = data.json()
+            if js_data["code"] == 200:
+                #self.account_index = js_data["accounts"][0]["index"]
+                logger.info(f"get_account_info success, account_index: {self.account_index}")
+            else:
+                raise Exception("get_account_info error")
+        else:
+            return None
     
     def get_client_order_id(self):
         """获得client_order_id"""
         return int(time.time() * 1000)
     
-    # @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=False)
+
     def get_exchange_info(self):
         """获得交易所信息"""
         url = f"{self.base_url}/api/v1/orderBookDetails"
-
-        if self.proxy:
-            proxies = {
-                "http": self.proxy,
-                "https": self.proxy,
-            }
-        else:
-            proxies = None
-        data = requests.get(url, headers=self.headers, timeout=60, proxies=proxies)
+        data = requests.get(url, headers=self.headers, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             if js_data["code"] == 200:
@@ -435,10 +174,10 @@ class LightAdapter(ExchangeAdapter):
             else:
                 raise Exception("get_exchange_info error")
         else:
-            raise Exception("get_exchange_info error")
+            return {}, {}, {}
     
 
-    @retry_wrapper(retries=5, sleep_seconds=1, is_adapter_method=True)
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def get_orderbook_ticker(self, symbol: str) -> AdapterResponse[BookTicker]:
         """
         获取盘口价格
@@ -451,14 +190,7 @@ class LightAdapter(ExchangeAdapter):
         """
         market_id = self.market_index_dic[symbol]
         url = f"{self.base_url}/api/v1/orderBookOrders?market_id={market_id}&&limit=100"
-        if self.proxy:
-            proxies = {
-                "http": self.proxy,
-                "https": self.proxy,
-            }
-        else:
-            proxies = None
-        data = requests.get(url, headers=self.headers, timeout=60, proxies=proxies)
+        data = requests.get(url, headers=self.headers, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             if js_data["code"] == 200:
@@ -491,7 +223,7 @@ class LightAdapter(ExchangeAdapter):
             logger.error(f"获取盘口价格失败: {e}")
             return AdapterResponse(success=False, data=None, error_msg=str(e))
     
-    @retry_wrapper(retries=5, sleep_seconds=1, is_adapter_method=True)
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def get_depth(self, symbol: str, limit: int=100) -> AdapterResponse[BookTicker]:
         """
         获取盘口价格
@@ -504,14 +236,7 @@ class LightAdapter(ExchangeAdapter):
         """
         market_id = self.market_index_dic[symbol]
         url = f"{self.base_url}/api/v1/orderBookOrders?market_id={market_id}&&limit={limit}"
-        if self.proxy:
-            proxies = {
-                "http": self.proxy,
-                "https": self.proxy,
-            }
-        else:
-            proxies = None
-        data = requests.get(url, headers=self.headers, timeout=60, proxies=proxies)
+        data = requests.get(url, headers=self.headers, timeout=60)
         if data.status_code == 200:
             js_data = data.json()
             if js_data["code"] == 200:
@@ -599,37 +324,10 @@ class LightAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        # 验证订单方向
-        error_msg = self.validate_order_direction(side, position_side, is_open=False)
-        if error_msg:
-            return AdapterResponse(
-                success=False,
-                data=None,
-                error_msg=error_msg,
-            )
-        
-        bookticker_response = self.get_orderbook_ticker(symbol)
-        if not bookticker_response.success:
-            return AdapterResponse(
-                success=False,
-                data=None,
-                error_msg=bookticker_response.error_msg,
-            )
-        ask_price = bookticker_response.data.ask_price
-        bid_price = bookticker_response.data.bid_price
-
-        if side == "BUY":
-            price = ask_price * (1 + out_price_rate)
-        else:
-            price = bid_price * (1 - out_price_rate)
-
-        quantity = self.adjust_order_qty(symbol, quantity)
-        price = self.adjust_order_price(symbol, price)
-        
-        return self.place_limit_order(symbol, side, position_side, quantity, price)
+        return self.place_market_open_order(symbol, side, position_side, quantity, out_price_rate)
     
     
-    @retry_wrapper(retries=5, sleep_seconds=1, is_adapter_method=True)
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def query_position(self, symbol: str) -> AdapterResponse[SymbolPosition]:
         """
         查询持仓
@@ -645,14 +343,7 @@ class LightAdapter(ExchangeAdapter):
             market_id = self.market_index_dic[symbol]
 
             url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
-            if self.proxy:
-                proxies = {
-                    "http": self.proxy,
-                    "https": self.proxy,
-                }
-            else:
-                proxies = None
-            data = requests.get(url, headers=self.headers, timeout=60, proxies=proxies)
+            data = requests.get(url, headers=self.headers, timeout=60)
             if data.status_code == 200:
                 data = data.json()
                 code = data.get("code")
@@ -683,7 +374,7 @@ class LightAdapter(ExchangeAdapter):
             logger.error(f"查询持仓失败: {e}", exc_info=True)
             return AdapterResponse(success=False, data=None, error_msg=str(e))
     
-    @retry_wrapper(retries=5, sleep_seconds=1, is_adapter_method=True)
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def query_order(self, symbol: str, order_id: str) -> AdapterResponse[OrderInfo]:
         """
         查询订单
@@ -700,14 +391,7 @@ class LightAdapter(ExchangeAdapter):
         try:
             # 1.先检查 open_orders 里面是否有这个订单
             url_activate_orders = f"{self.base_url}/api/v1/accountActiveOrders?account_index={self.account_index}&market_id={market_id}&auth={self.auth_token}"
-            if self.proxy:
-                proxies = {
-                    "http": self.proxy,
-                    "https": self.proxy,
-                }
-            else:
-                proxies = None
-            data = requests.get(url_activate_orders, headers=self.headers, timeout=60, proxies=proxies)
+            data = requests.get(url_activate_orders, headers=self.headers, timeout=60)
             if data.status_code == 200:
                 data = data.json()
                 code = data.get("code")
@@ -721,7 +405,6 @@ class LightAdapter(ExchangeAdapter):
                                 avg_price = float(order_item["filled_quote_amount"]) / float(order_item["filled_base_amount"])
                             if order_item["is_ask"]:
                                 side = "SELL"
-
                             else:
                                 side = "BUY"
                             position_side = "open"
@@ -744,19 +427,12 @@ class LightAdapter(ExchangeAdapter):
                     logger.error(f"查询订单失败: {e}", exc_info=True)
                     return AdapterResponse(success=False, data=None, error_msg=str(e))
             else:
-                logger.error(f"查询订单失败: {e}", exc_info=True)
-                return AdapterResponse(success=False, data=None, error_msg=str(e))
+                logger.error(f"查询订单失败: {data}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(data))
             
             # 2.再检查 完成的订单里面是否有这个订单
             url_inactivate_orders = f"{self.base_url}/api/v1/accountInactiveOrders?auth={self.auth_token}&account_index={self.account_index}&market_id={market_id}&limit=100"
-            if self.proxy:
-                proxies = {
-                    "http": self.proxy,
-                    "https": self.proxy,
-                }
-            else:
-                proxies = None
-            data = requests.get(url_inactivate_orders, headers=self.headers, timeout=60, proxies=proxies)
+            data = requests.get(url_inactivate_orders, headers=self.headers, timeout=60)
             if data.status_code == 200:
                 data = data.json()
                 if data["code"] == 200:
@@ -789,8 +465,8 @@ class LightAdapter(ExchangeAdapter):
                             )
                             return AdapterResponse(success=True, data=order_info, error_msg="")
             else:
-                logger.error(f"查询订单失败: {e}", exc_info=True)
-                return AdapterResponse(success=False, data=None, error_msg=str(e))
+                logger.error(f"查询订单失败: {data}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(data))
             
             msg = f"Not found this order:{order_id}"
             logger.error(f"查询订单失败: {msg}", exc_info=True)
@@ -830,27 +506,7 @@ class LightAdapter(ExchangeAdapter):
         Returns:
             AdapterResponse: 包含订单信息的响应
         """
-        def is_retryable_error(err):
-            try:
-                # 针对"Too Many Requests"以及"couldn't get nonce"重试一次
-                if err is None:
-                    return False
-                err_str = str(err)
-                if (
-                    "Too Many Requests" in err_str
-                    or "couldn't get nonce" in err_str
-                ):
-                    return True
-            except Exception:
-                pass
-            return False
-
         try:
-            # 下单前先设置 margin mode
-            # margin_result = self.set_margin_mode(symbol)
-            # if not margin_result.success:
-            #     logger.warning(f"设置 margin mode 失败，继续尝试下单: {margin_result.error_msg}")
-
             market_id = self.market_index_dic[symbol]
             price_decimal = self.price_decimal_dic[symbol]
             size_decimal = self.size_decimal_dic[symbol]
@@ -861,14 +517,14 @@ class LightAdapter(ExchangeAdapter):
                     data=None,
                     error_msg=f"quantity must be {size_decimal} decimal places",
                 )
-
+            
             if round(price, price_decimal) != price:
                 return AdapterResponse(
                     success=False,
                     data=None,
                     error_msg=f"price must be {price_decimal} decimal places",
                 )
-
+            
             send_price = int(price * (10 ** price_decimal))
             send_quantity = int(quantity * (10 ** size_decimal))
 
@@ -876,18 +532,19 @@ class LightAdapter(ExchangeAdapter):
                 is_ask = False
             else:
                 is_ask = True
-
+            
             position_side = "open"
             client_order_index = self.get_client_order_id()
 
             # 在新的事件循环中重新创建客户端并执行操作
             async def _create_limit_order_with_new_client():
+                # 重新创建客户端
                 new_client = lighter.SignerClient(
                     url=self.base_url,
                     api_private_keys={self.api_key_index: self.apikey_private_key},
                     account_index=self.account_index,
-                    #proxy=self.proxy,
                 )
+                
                 try:
                     # 执行订单创建
                     result = await new_client.create_order(
@@ -897,53 +554,41 @@ class LightAdapter(ExchangeAdapter):
                         price=send_price,
                         is_ask=is_ask,
                         order_type=lighter.SignerClient.ORDER_TYPE_LIMIT,
+                        #time_in_force=lighter.SignerClient.ORDER_TIME_IN_FORCE_IMMEDIATE_OR_CANCEL,
                         time_in_force=lighter.SignerClient.ORDER_TIME_IN_FORCE_GOOD_TILL_TIME,
+                        #time_in_force=lighter.SignerClient.ORDER_TIME_IN_FORCE_POST_ONLY,
+                        #order_expiry=lighter.SignerClient.DEFAULT_28_DAY_ORDER_EXPIRY
+                        #order_expiry=lighter.SignerClient.DEFAULT_IOC_EXPIRY,
+                        #order_expiry=lighter.SignerClient.MINUTE,
                     )
                     return result
                 finally:
                     # 确保关闭客户端
                     await new_client.close()
             
-            # 执行下单，遇到特定错误（too many requests/nonce）仅重试一次
-            for attempt in range(2):
-                x = tx_hash = err = None
-                try:
-                    x, tx_hash, err = asyncio.run(_create_limit_order_with_new_client())
-                except Exception as exc:
-                    logger.error(f"异步创建限价单失败: {exc}")
-                    err = exc
+            # 使用新的事件循环
+            x, tx_hash, err = asyncio.run(_create_limit_order_with_new_client())
 
-                if err is not None:
-                    logger.error(f"下市价开仓单失败: {err}")
-                    # 如果是重试后还出错，则直接返回，不再反复重试
-                    if attempt == 0 and is_retryable_error(err):
-                        logger.info("检测到限频/nonce失败, 重试一次下单...")
-                        continue
-                    else:
-                        return AdapterResponse(
-                            success=False,
-                            data=None,
-                            error_msg=str(err),
-                        )
-                else:
-                    # 下单成功
-                    order_placement_result = OrderPlacementResult(
-                        symbol=symbol,
-                        order_id=client_order_index,
-                        order_qty=quantity,
-                        order_price=price,
-                        side=side,
-                        position_side=position_side,
-                        api_resp={"tx_hash": tx_hash, "result": x},
-                    )
-                    return AdapterResponse(
-                        success=True, data=order_placement_result, error_msg=""
-                    )
-            # 进入不到这里，保险起见给兜底
+            if err is not None:
+                logger.error(f"下市价开仓单失败: {err}")
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=str(err),
+                )
+            
+            order_placement_result = OrderPlacementResult(
+                symbol=symbol,
+                order_id=client_order_index,
+                order_qty=quantity,
+                order_price=price,
+                side=side,
+                position_side=position_side,
+                api_resp={"tx_hash": tx_hash, "result": x},
+            )
+
             return AdapterResponse(
-                success=False,
-                data=None,
-                error_msg="Unknown error in place_limit_order",
+                success=True, data=order_placement_result, error_msg=""
             )
         except Exception as e:
             logger.error(f"下限价单失败: {e}")
@@ -953,7 +598,7 @@ class LightAdapter(ExchangeAdapter):
                 error_msg=str(e),
             )
     
-    @retry_wrapper(retries=5, sleep_seconds=1, is_adapter_method=True)
+    @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def get_net_value(self) -> AdapterResponse[float]:
         """
         获取净价值
@@ -969,7 +614,7 @@ class LightAdapter(ExchangeAdapter):
                 data = data.json()
                 code = data.get("code")
                 if code == 200:
-                    net_value = float(data["accounts"][0]["total_asset_value"])
+                    net_value = data["accounts"][0]["collateral"]
                     return AdapterResponse(success=True, data=net_value, error_msg="")
                 else:
                     logger.error(f"获取净价值失败: {data.text}")
@@ -1098,17 +743,10 @@ class LightAdapter(ExchangeAdapter):
                 # 重新创建客户端
                 new_client = lighter.SignerClient(
                     url=self.base_url,
-                    api_private_keys={self.api_key_index: self.apikey_private_key},
+                    private_key=self.apikey_private_key,
                     account_index=self.account_index,
-                    # api_key_index=self.api_key_index,
-                    # proxy=self.proxy,
+                    api_key_index=self.api_key_index,
                 )
-                # new_client = lighter.SignerClient(
-                #     url=self.base_url,
-                #     private_key=self.apikey_private_key,
-                #     account_index=self.account_index,
-                #     api_key_index=self.api_key_index,
-                # )
                 
                 try:
                     # 执行订单创建
@@ -1172,14 +810,8 @@ class LightAdapter(ExchangeAdapter):
         """
         try:
             url = f"{self.base_url}/api/v1/account?by=index&value={self.account_index}"
-            if self.proxy:
-                proxies = {
-                    "http": self.proxy,
-                    "https": self.proxy,
-                }
-            else:
-                proxies = None
-            data = requests.get(url, headers=self.headers, timeout=60, proxies=proxies)
+
+            data = requests.get(url, headers=self.headers, timeout=60)
             if data.status_code == 200:
                 data = data.json()
                 code = data.get("code")
@@ -1187,7 +819,7 @@ class LightAdapter(ExchangeAdapter):
                     account = data.get("accounts", [{}])[0]
 
                     # 1. 计算 margin_balance（保证金余额）
-                    margin_balance = float(data["accounts"][0]["cross_asset_value"])
+                    margin_balance = float(data["accounts"][0]["available_balance"])
 
                     # 2. 计算 initial_margin（初始保证金）和 maint_margin（维持保证金）
                     initial_margin = 0.0
@@ -1208,7 +840,7 @@ class LightAdapter(ExchangeAdapter):
                             initial_margin += pos_initial_margin
                             
                             # 维持保证金率通常为初始保证金率的一定比例（示例取 50%，需按实际规则调整）
-                            maint_margin_fraction = initial_margin_fraction * 0.6
+                            maint_margin_fraction = initial_margin_fraction * 0.5
                             pos_maint_margin = position_value / (100 / maint_margin_fraction)  # 仓位维持保证金
                             maint_margin += pos_maint_margin
                     
@@ -1241,30 +873,56 @@ class LightAdapter(ExchangeAdapter):
 if __name__ == "__main__":
     import sys
     import os 
-
-    # sys.path.append(".")
-    # from src.adapter_factory import AdapterFactory
-    # exchange_factory = AdapterFactory()
-    #lighter_adapter:LightAdapter  = exchange_factory.create_adapter(exchange_name="lighter", instance_name="lighter_3")
+    
     lighter_adapter = LightAdapter(
         l1_address="0xc7213d067325EB01341d7AE7C966FBb1Cdb4C168",
         apikey_private_key="d3f263a3fde4def5006270ef5562e81564b4be91e474052d991544428f56ef5e49db3e5d6c7cf57b",
         api_key_index=2
     )
 
-    lighter_adapter.judge_auth_token_expired()
-    print(lighter_adapter.get_exchange_info())
+    # data = lighter_adapter.get_account_info2()
+    # pass
 
-    # print(lighter_adapter.get_orderbook_ticker("ETHUSDT"))
-    # print(lighter_adapter.get_depth("ETHUSDT"))
-    data = lighter_adapter.place_market_open_order("EURUSDUSDT", "BUY", "LONG", 1)
-    # order_id = data.data.order_id
-    # print(order_id)
-    # print(lighter_adapter.query_order("PAXGUSDT", order_id))
-    # print(lighter_adapter.query_position("PAXGUSDT"))
+    # lighter_adapter.judge_auth_token_expired()
+    # print(lighter_adapter.auth_token)
+    # pass
 
-    # print(lighter_adapter.get_net_value())
-    # print(lighter_adapter.get_um_account_info())
+    # while True:
+    #     print(lighter_adapter.get_orderbook_ticker("PAXGUSDT"))
+    #     time.sleep(0.1)
+    # print(lighter_adapter.get_depth("EURUSDUSDT"))
+    # pass
+    print(lighter_adapter.place_market_open_order("EURUSDUSDT", "BUY", "LONG", 1))
+    #print(lighter_adapter.place_market_open_order("ETHUSDT", "SELL", "SHORT", 0.1))
+    #print(lighter_adapter.get_account_info()
+    # print(lighter_adapter.query_position("ETHUSDT"))
+
+    # print(lighter_adapter.query_order("ETHUSDT", "1764148056"))
+    #print(lighter_adapter.query_order("ETHUSDT", "1764212198891"))
+
+    # print(lighter_adapter.cancel_all_orders("ETHUSDT"))
+    # print(lighter_adapter.place_limit_order("ETHUSDT", "BUY", "LONG", 0.1, 2800))
+    #print(lighter_adapter.place_limit_order("ETHUSDT", "SELL", "SHORT", 0.1, 2000)
+
+    #print(lighter_adapter.get_net_value())
+
+    #print(lighter_adapter.get_account_position_equity_ratio())
+
+    #print(lighter_adapter.get_contract_trade_unit("PAXGUSDT"))
+
+    #print(lighter_adapter.query_all_um_open_orders("ETHUSDT"))
+
+    #print(lighter_adapter.get_um_account_info())
+
+    #lighter_adapter.close()
+
+    #lighter_adapter.get_account_info()
+
+    #print(lighter_adapter.adjust_order_price("ETHUSDT", 3.3333, "UP"))
+
+    #print(lighter_adapter.adjust_order_qty("ETHUSDT", 3.3333333))
+
+    #print(lighter_adapter.adjust_order_qty("ETHUSDT", 0.1))
 
     pass
 

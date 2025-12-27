@@ -7,6 +7,38 @@ from typing import List, Optional, Literal
 
 
 @dataclass
+class LighterTrade:
+    """
+    Lighter DEX 交易数据
+
+    CSV 格式: exchange,symbol,timestamp,local_timestamp,trade_id,side,price,amount
+    """
+    exchange: str
+    symbol: str
+    timestamp: int  # 微秒
+    local_timestamp: int  # 微秒
+    trade_id: int
+    side: Literal["buy", "sell"]  # taker side
+    price: str
+    amount: str
+
+    def to_csv_row(self) -> str:
+        return f"{self.exchange},{self.symbol},{self.timestamp},{self.local_timestamp},{self.trade_id},{self.side},{self.price},{self.amount}"
+
+    def to_dict(self) -> dict:
+        return {
+            "exchange": self.exchange,
+            "symbol": self.symbol,
+            "timestamp": self.timestamp,
+            "local_timestamp": self.local_timestamp,
+            "trade_id": self.trade_id,
+            "side": self.side,
+            "price": self.price,
+            "amount": self.amount,
+        }
+
+
+@dataclass
 class TardisL2Update:
     """
     Tardis L2 增量更新

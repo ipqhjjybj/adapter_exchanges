@@ -6,3 +6,4 @@ __pycache__
 data
 nohup.out
 *.log
+test*.py
