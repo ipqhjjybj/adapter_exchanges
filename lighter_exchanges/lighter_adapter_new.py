@@ -260,9 +260,9 @@ class LightAdapter(ExchangeAdapter):
             next_expiry_timestamp = start_timestamp + expiry_hours * 3600
             logger.info(f"create new auth token, start_timestamp:{start_timestamp}, expiry_hours:{expiry_hours}")
             auth_token, error = self.signer_client.create_auth_token_with_expiry(
-                deadline=next_expiry_timestamp
-                # expiry_hours * 3600,
-                # timestamp=start_timestamp
+                # deadline=next_expiry_timestamp,
+                expiry_hours * 3600,
+                timestamp=start_timestamp
             )
             if error is not None:
                 raise Exception(f"Failed to create auth token: {error}")
@@ -497,6 +497,191 @@ class LightAdapter(ExchangeAdapter):
         api_instance = lighter.OrderApi(self.client)
         api_response = await api_instance.account_inactive_orders(self.account_index, limit, authorization=self.auth_token, cursor=cursor)
         return api_response
+
+    @retry_wrapper_async(retries=3, sleep_seconds=1, is_adapter_method=True)
+    async def get_position_funding_async(self, symbol: str = None, limit: int = 100) -> AdapterResponse[list]:
+        """
+        获取账户持仓资金费
+
+        由于 Python SDK 没有提供 position_funding 方法，这里直接调用 HTTP API
+
+        Args:
+            symbol: 交易对（可选，如果不传则获取所有）
+            limit: 返回记录数量限制
+
+        Returns:
+            AdapterResponse: 包含资金费记录的响应
+        """
+        try:
+            await self.judge_auth_token_expired_async()
+
+            # 如果指定了symbol，获取对应的market_id
+            market_id = None
+            if symbol:
+                market_id = self.market_index_dic.get(symbol)
+                if market_id is None:
+                    return AdapterResponse(
+                        success=False,
+                        data=None,
+                        error_msg=f"Symbol {symbol} not found in market_index_dic"
+                    )
+
+            # 构建 API URL 和参数
+            url = f"{self.base_url}/api/v1/positionFunding"
+            params = {
+                "auth": self.auth_token,
+                "account_index": self.account_index,
+                "limit": limit
+            }
+
+            if market_id is not None:
+                params["marketId"] = market_id
+
+            # 构建请求头
+
+            # 发送 HTTP GET 请求
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, headers=self.headers, proxy=self.proxy, ssl=(not self.proxy)) as response:
+                    status_code = response.status
+                    data = await response.json()
+
+            if status_code == 200:
+                return AdapterResponse(
+                    success=True,
+                    data=data.get("funding_payments", []),
+                    error_msg=""
+                )
+            else:
+                error_msg = data.get("message", f"HTTP {status_code}")
+                logger.error(f"获取持仓资金费失败: {error_msg}")
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=error_msg
+                )
+        except Exception as e:
+            logger.error(f"获取持仓资金费失败: {e}", exc_info=True)
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e)
+            )
+
+    @retry_wrapper_async(retries=3, sleep_seconds=1, is_adapter_method=True)
+    async def get_deposit_history_async(self, limit: int = 100, cursor: str = None) -> AdapterResponse[list]:
+        """
+        获取存款历史
+
+        直接调用 HTTP API
+
+        Args:
+            limit: 返回记录数量限制
+            cursor: 分页游标（可选）
+
+        Returns:
+            AdapterResponse: 包含存款历史记录的响应
+        """
+        try:
+            await self.judge_auth_token_expired_async()
+
+            # 构建 API URL 和参数
+            url = f"{self.base_url}/api/v1/deposit/history"
+            params = {
+                "auth": self.auth_token,
+                "account_index": self.account_index,
+                "l1_address": self.l1_address,
+                "limit": limit
+            }
+
+            if cursor is not None:
+                params["cursor"] = cursor
+
+            # 发送 HTTP GET 请求
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, headers=self.headers, proxy=self.proxy, ssl=(not self.proxy)) as response:
+                    status_code = response.status
+                    data = await response.json()
+
+            if status_code == 200:
+                return AdapterResponse(
+                    success=True,
+                    data=data.get("deposits", []),
+                    error_msg=""
+                )
+            else:
+                error_msg = data.get("message", f"HTTP {status_code}")
+                logger.error(f"获取存款历史失败: {error_msg}")
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=error_msg
+                )
+        except Exception as e:
+            logger.error(f"获取存款历史失败: {e}", exc_info=True)
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e)
+            )
+
+    @retry_wrapper_async(retries=3, sleep_seconds=1, is_adapter_method=True)
+    async def get_withdraw_history_async(self, limit: int = 100, cursor: str = None) -> AdapterResponse[list]:
+        """
+        获取提现历史
+
+        直接调用 HTTP API
+
+        Args:
+            limit: 返回记录数量限制
+            cursor: 分页游标（可选）
+
+        Returns:
+            AdapterResponse: 包含提现历史记录的响应
+        """
+        try:
+            await self.judge_auth_token_expired_async()
+
+            # 构建 API URL 和参数
+            url = f"{self.base_url}/api/v1/withdraw/history"
+            params = {
+                "auth": self.auth_token,
+                "account_index": self.account_index,
+                "limit": limit
+            }
+
+            if cursor is not None:
+                params["cursor"] = cursor
+
+            # 发送 HTTP GET 请求
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, headers=self.headers, proxy=self.proxy, ssl=(not self.proxy)) as response:
+                    status_code = response.status
+                    data = await response.json()
+
+            if status_code == 200:
+                return AdapterResponse(
+                    success=True,
+                    data=data.get("withdrawals", []),
+                    error_msg=""
+                )
+            else:
+                error_msg = data.get("message", f"HTTP {status_code}")
+                logger.error(f"获取提现历史失败: {error_msg}")
+                return AdapterResponse(
+                    success=False,
+                    data=None,
+                    error_msg=error_msg
+                )
+        except Exception as e:
+            logger.error(f"获取提现历史失败: {e}", exc_info=True)
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str(e)
+            )
 
     @retry_wrapper_async(retries=5, sleep_seconds=1, is_adapter_method=True)
     async def query_position_async(self, symbol: str) -> AdapterResponse[SymbolPosition]:
@@ -1022,11 +1207,37 @@ async def main():
             api_key_index=4
         )
 
-        # 2. 调用异步方法（必须加 await）
-        result = await lighter_adapter.detect_account_index_async("SOLUSDT", 2)
-        
-        # 3. 处理返回结果（可选）
-        print("异步方法返回结果：", result)
+        # 2. 检测 account_index
+        account_index, error_msg = await lighter_adapter.detect_account_index_async("SOLUSDT", 2)
+
+        if account_index is None:
+            print(f"检测 account_index 失败: {error_msg}")
+            return
+
+        print(f"检测到 account_index: {account_index}")
+
+        # 3. 设置 account_index 并连接
+        lighter_adapter.account_index = account_index
+        await lighter_adapter.connect()
+
+        # 4. 获取持仓资金费（所有市场）
+        # result = await lighter_adapter.get_position_funding_async(symbol="PAXGUSDT", limit=50)
+        # if result.success:
+        #     print(result.data)
+        # else:
+        #     print(f"获取持仓资金费失败: {result.error_msg}")
+
+
+        # # 获取存款历史
+        # result = await lighter_adapter.get_deposit_history_async(limit=100)
+        # if result.success:
+        #     print(result.data)
+
+        # # 获取提现历史（带分页）
+        result = await lighter_adapter.get_withdraw_history_async(limit=50)
+        if result.success:
+            print(result.data)
+        pass
 
     except Exception as e:
         # 异常处理：捕获异步方法执行中的所有错误

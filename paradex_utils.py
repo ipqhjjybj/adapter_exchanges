@@ -9,7 +9,6 @@ from enum import IntEnum
 from typing import Callable, Dict, Optional, Tuple, Sequence, Union, cast
 from typing import List, Optional
 
-from eth_account.messages import encode_structured_data
 from eth_account.signers.local import LocalAccount
 from web3.auto import Web3, w3
 from web3.middleware import construct_sign_and_send_raw_middleware

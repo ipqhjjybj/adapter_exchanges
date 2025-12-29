@@ -78,10 +78,10 @@ from src.utils import retry_wrapper, adjust_to_price_filter, adjust_to_lot_size
 from src.log_kit import logger
 from src.exchange_adapter import ExchangeAdapter
 
-from src.adapters.paradex_utils import build_auth_message, get_account
-from src.adapters.paradex_shared import order_sign_message, flatten_signature, Order, OrderType, OrderSide
-# from paradex_utils import build_auth_message, get_account
-# from paradex_shared import order_sign_message, flatten_signature, Order, OrderType, OrderSide
+# from src.adapters.paradex_utils import build_auth_message, get_account
+# from src.adapters.paradex_shared import order_sign_message, flatten_signature, Order, OrderType, OrderSide
+from paradex_utils import build_auth_message, get_account
+from paradex_shared import order_sign_message, flatten_signature, Order, OrderType, OrderSide
 
 
 class ParadexAdapter(ExchangeAdapter):
@@ -576,6 +576,9 @@ class ParadexAdapter(ExchangeAdapter):
             signature_timestamp=int(time.time() * 1000),
         )
         return order
+    
+    
+
 
     def place_limit_order(
         self, symbol: str, side: str, position_side: str, quantity: float, price: float
@@ -665,7 +668,40 @@ class ParadexAdapter(ExchangeAdapter):
                 data=None,
                 error_msg=str(e),
             )
+        
+    def updates_accont_referred_code(self):
+        """
+        psst 单
+        """
+        self.judge_auth_token_expired()
+        try:
+            headers = {"Authorization": f"Bearer {self.jwt_token}"}
+
+            url = self.base_url + '/account/referrer'
+
+            data = {
+                "referred_by": "shrewdog98"
+            }
+            response = requests.post(url, proxies=self.proxies, json=data, headers=headers)
+            status_code = response.status_code
+            
+            if status_code == 200:
+                return AdapterResponse(success=True, data=response.json(), error_msg="")
+            else:
+                logger.error(f"邀请码: {response.text}", exc_info=True)
+                return AdapterResponse(success=False, data=None, error_msg=str(response.text))
+
     
+        except Exception as ex:
+            logger.error(f"获取净价值失败: {ex}", exc_info=True)
+            #self.check_error(response_json)
+            return AdapterResponse(
+                success=False,
+                data=None,
+                error_msg=str("abc"),
+            )
+        
+        
     @retry_wrapper(retries=3, sleep_seconds=1, is_adapter_method=True)
     def get_net_value(self) -> AdapterResponse[float]:
         """
@@ -943,25 +979,29 @@ if __name__ == "__main__":
     api = ParadexAdapter(paradex_account_address, paradex_account_private_key, paradex_account_public_key)
     
     symbol = "PAXG-USD-PERP"
-    t1=time.time()
-    for i in range(1000):
-        try:
-            print(api.get_net_value())
-            api.reset_token() 
+    # t1=time.time()
+    # for i in range(1000):
+    #     try:
+    #         print(api.get_net_value())
+    #         api.reset_token() 
 
-            t2 = time.time()
-            print("use time:", (t2 - t1) / (i+1))
-        except Exception as e:
-            print(e)
+    #         t2 = time.time()
+    #         print("use time:", (t2 - t1) / (i+1))
+    #     except Exception as e:
+    #         print(e)
     #data = api.get_orderbook_ticker(symbol)
     # data = api.get_depth(symbol)
     # print(data)
     #print(api.get_account_info())
     # print(api.get_net_value())
 
-
-    data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
+    data = api.updates_accont_referred_code()
     print(data)
+
+    # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
+    # print(data)
+
+    pass
     # data = api.place_limit_order(symbol=symbol, side="BUY", position_side="LONG", quantity=0.004, price=3000)
     # print(data)
 
@@ -997,8 +1037,8 @@ if __name__ == "__main__":
     # data = api.query_all_um_open_orders(symbol)
     # print(data)
 
-    data = api.get_um_account_info()
-    print(data)
+    # data = api.get_um_account_info()
+    # print(data)
     pass
     
 
