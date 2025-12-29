@@ -970,12 +970,18 @@ if __name__ == "__main__":
     import os 
 
 
+    # 这是我的账户
     paradex_account_address = "0x58419d41b2986d4f6267ccbb7a53a73bcdd95868771648064eea1d205d56408"
     #paradex_account_private_key = ""
     # sub_key
     paradex_account_private_key = "0x0044ae9b363847e54509e3b3f6ba53b946b78a8ddcc27874feabfc7a0a450bd7"
     paradex_account_public_key = "0x7e17ec180717664faeff3f3e907a29f027727ea24e662881442dd5c66c9ed8f"
 
+    # 这是zjx 的账户
+    # paradex_account_address = "0x587967a921d0ad97590689a36f38595862c5ed997c40890d5f4a8b44a65a37e"
+    # paradex_account_private_key = "0x058e1d3af54540935be8e9454af9e53c6dd0eb96c0461fb230a5520f8ec76729"
+    # paradex_account_public_key = "0x51740ff6abaa75b7ea18ce4c81e1dcc02df21aca6a3f26d8f0c42db0df6a7d6"
+    
     api = ParadexAdapter(paradex_account_address, paradex_account_private_key, paradex_account_public_key)
     
     symbol = "PAXG-USD-PERP"
