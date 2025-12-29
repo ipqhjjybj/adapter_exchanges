@@ -1257,8 +1257,7 @@ if __name__ == "__main__":
 
     print(lighter_adapter.auth_token)
 
-    # lighter_adapter.judge_auth_token_expired()
-    # print(lighter_adapter.get_exchange_info())
+    pass
 
     # print(lighter_adapter.get_orderbook_ticker("ETHUSDT"))
     # print(lighter_adapter.get_depth("ETHUSDT"))
